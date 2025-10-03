@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+otsimenv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+/dist
+/build
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backend outputs
+backend/output/
+*.json
+*.svg
+*.md
+!README.md
+!QUICKSTART.md
+!CONTRIBUTING.md
+!CHANGELOG.md
+!PROJECT_SUMMARY.md
+!claude.md
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Coverage
+.coverage
+htmlcov/
+*.cover
+.pytest_cache/
+
+# Logs
+*.log
+logs/
