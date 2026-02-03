@@ -353,32 +353,33 @@ def _draw_well_pattern(x: int, y: int, width: int, height: int,
     svg = ''
 
     # Calculate well dimensions with padding
-    padding_x = 15
-    padding_y = 25  # Extra top padding for slot label
-    padding_bottom = 8
+    # Top padding for slot label, side padding for margins, bottom padding for labware name
+    padding_top = 18
+    padding_bottom = 18
+    padding_x = 20
 
     available_width = width - (padding_x * 2)
-    available_height = height - padding_y - padding_bottom
+    available_height = height - padding_top - padding_bottom
 
     # Calculate spacing
     cell_width = available_width / cols
     cell_height = available_height / rows
 
-    # Well radius (smaller of cell dimensions, with margin)
-    radius = min(cell_width, cell_height) * 0.35
+    # Well radius - slightly larger for better visibility
+    radius = min(cell_width, cell_height) * 0.38
 
     # For tipracks, use slightly different styling
     if is_tiprack:
-        stroke_width = 0.8
-        fill_opacity = 0.3
+        stroke_width = 1.0
+        fill_opacity = 0.4
     else:
-        stroke_width = 0.5
-        fill_opacity = 0.1
+        stroke_width = 0.7
+        fill_opacity = 0.15
 
     for row in range(rows):
         for col in range(cols):
             cx = x + padding_x + (col + 0.5) * cell_width
-            cy = y + padding_y + (row + 0.5) * cell_height
+            cy = y + padding_top + (row + 0.5) * cell_height
 
             svg += f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{radius:.1f}" '
             svg += f'fill="{well_color}" fill-opacity="{fill_opacity}" '
