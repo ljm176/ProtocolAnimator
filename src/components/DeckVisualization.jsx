@@ -62,18 +62,22 @@ export default function DeckVisualization({ deckSvg, deckLayout }) {
       )}
 
       {/* Color Legend */}
-      <div className="mt-4 flex gap-4 text-xs">
+      <div className="mt-4 flex flex-wrap gap-4 text-xs">
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-100 border border-blue-400 rounded"></div>
+          <div className="w-4 h-4 bg-blue-100 border-2 border-blue-500 rounded"></div>
           <span>Modules</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-gray-100 border border-gray-400 rounded"></div>
+          <div className="w-4 h-4 bg-green-100 border-2 border-green-500 rounded"></div>
+          <span>Tipracks</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-gray-100 border-2 border-gray-500 rounded"></div>
           <span>Labware</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-100 border border-green-400 rounded"></div>
-          <span>Tipracks</span>
+          <div className="w-4 h-4 bg-red-100 border-2 border-red-500 rounded"></div>
+          <span>Trash</span>
         </div>
       </div>
     </div>

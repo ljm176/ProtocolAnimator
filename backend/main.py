@@ -2,6 +2,7 @@
 FastAPI backend for Opentrons Protocol Simulator
 Provides REST API endpoints for protocol simulation and artifact generation.
 """
+import asyncio
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,15 @@ import tempfile
 import shutil
 from typing import Optional
 from simulator import ProtocolSimulator, generate_deck_svg, generate_report
+
+
+def run_simulation_sync(protocol_path: str, metadata_dict: dict) -> dict:
+    """
+    Run protocol simulation synchronously.
+    This is called in a thread pool to avoid asyncio.run() conflicts.
+    """
+    simulator = ProtocolSimulator(protocol_path, metadata_dict)
+    return simulator.simulate()
 
 app = FastAPI(title="Opentrons Protocol Simulator API", version="1.0.0")
 
@@ -66,9 +76,12 @@ async def simulate_protocol(
         with temp_protocol.open('wb') as f:
             shutil.copyfileobj(protocol_file.file, f)
 
-        # Run simulation
-        simulator = ProtocolSimulator(str(temp_protocol), metadata_dict)
-        result = simulator.simulate()
+        # Run simulation in a thread pool to avoid asyncio.run() conflicts
+        # (opentrons.simulate internally uses asyncio.run which can't be called
+        # from within FastAPI's running event loop)
+        result = await asyncio.to_thread(
+            run_simulation_sync, str(temp_protocol), metadata_dict
+        )
 
         if not result['success']:
             raise HTTPException(status_code=500, detail=result['error'])

@@ -319,8 +319,76 @@ class ProtocolSimulator:
                         })
 
 
+def _detect_well_format(load_name: str) -> tuple:
+    """
+    Detect well format from labware load name.
+    Returns (rows, cols) or None if not a standard format.
+    """
+    load_name = load_name.lower()
+
+    # Check for common formats
+    if '384' in load_name:
+        return (16, 24)
+    elif '96' in load_name:
+        return (8, 12)
+    elif '48' in load_name:
+        return (6, 8)
+    elif '24' in load_name:
+        return (4, 6)
+    elif '12' in load_name and 'reservoir' in load_name:
+        return (1, 12)
+    elif '6' in load_name and 'well' in load_name:
+        return (2, 3)
+    elif 'reservoir' in load_name:
+        return (1, 1)  # Single trough
+
+    return None
+
+
+def _draw_well_pattern(x: int, y: int, width: int, height: int,
+                       rows: int, cols: int, well_color: str, is_tiprack: bool = False) -> str:
+    """
+    Generate SVG for a well/tip pattern inside a slot.
+    """
+    svg = ''
+
+    # Calculate well dimensions with padding
+    padding_x = 15
+    padding_y = 25  # Extra top padding for slot label
+    padding_bottom = 8
+
+    available_width = width - (padding_x * 2)
+    available_height = height - padding_y - padding_bottom
+
+    # Calculate spacing
+    cell_width = available_width / cols
+    cell_height = available_height / rows
+
+    # Well radius (smaller of cell dimensions, with margin)
+    radius = min(cell_width, cell_height) * 0.35
+
+    # For tipracks, use slightly different styling
+    if is_tiprack:
+        stroke_width = 0.8
+        fill_opacity = 0.3
+    else:
+        stroke_width = 0.5
+        fill_opacity = 0.1
+
+    for row in range(rows):
+        for col in range(cols):
+            cx = x + padding_x + (col + 0.5) * cell_width
+            cy = y + padding_y + (row + 0.5) * cell_height
+
+            svg += f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{radius:.1f}" '
+            svg += f'fill="{well_color}" fill-opacity="{fill_opacity}" '
+            svg += f'stroke="{well_color}" stroke-width="{stroke_width}"/>'
+
+    return svg
+
+
 def generate_deck_svg(robot_config: Dict) -> str:
-    """Generate SVG representation of the deck layout."""
+    """Generate SVG representation of the deck layout with well patterns."""
     # Simple SVG grid for 12 slots (OT-2)
     svg = '''<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
     <rect width="800" height="600" fill="#f5f5f5"/>
@@ -331,24 +399,87 @@ def generate_deck_svg(robot_config: Dict) -> str:
     slot_height = 120
     margin = 50
 
+    # Build lookup for what's in each slot
+    modules = {str(m['slot']): m for m in robot_config.get('modules', [])}
+    labware_by_slot = {}
+    for lw in robot_config.get('labware', []):
+        slot = lw['slot']
+        if slot not in labware_by_slot:
+            labware_by_slot[slot] = []
+        labware_by_slot[slot].append(lw)
+
     for i in range(12):
-        row = i // 3
+        # Flip vertically: slot 1-3 at bottom, 10-12 at top
+        row = 3 - (i // 3)
         col = i % 3
         x = margin + col * slot_width
         y = margin + row * slot_height
         slot_num = i + 1
+        slot_str = str(slot_num)
 
-        # Draw slot
+        # Determine slot contents and color
+        has_module = slot_str in modules
+        slot_labware = labware_by_slot.get(slot_str, [])
+
+        # Default empty slot
+        fill_color = "white"
+        stroke_color = "#333"
+        label_text = None
+        well_format = None
+        is_tiprack = False
+        load_name = ''
+
+        if has_module:
+            # Module slot - blue
+            fill_color = "#dbeafe"  # blue-100
+            stroke_color = "#3b82f6"  # blue-500
+            label_text = modules[slot_str].get('model', 'Module')
+            # Check for nested labware on module
+            if slot_labware:
+                nested_lw = slot_labware[0]
+                load_name = nested_lw.get('loadName', '').lower()
+                well_format = _detect_well_format(load_name)
+                is_tiprack = 'tiprack' in load_name or 'tip_rack' in load_name
+        elif slot_labware:
+            lw = slot_labware[0]  # Primary labware in slot
+            load_name = lw.get('loadName', '').lower()
+            label_text = lw.get('label', lw.get('loadName', 'Unknown'))
+            well_format = _detect_well_format(load_name)
+
+            if 'tiprack' in load_name or 'tip_rack' in load_name:
+                # Tiprack - green
+                fill_color = "#dcfce7"  # green-100
+                stroke_color = "#22c55e"  # green-500
+                is_tiprack = True
+            elif 'trash' in load_name:
+                # Trash - red/orange
+                fill_color = "#fee2e2"  # red-100
+                stroke_color = "#ef4444"  # red-500
+            else:
+                # Regular labware - gray
+                fill_color = "#f3f4f6"  # gray-100
+                stroke_color = "#6b7280"  # gray-500
+
+        # Draw slot background
         svg += f'<rect x="{x}" y="{y}" width="{slot_width-10}" height="{slot_height-10}" '
-        svg += 'fill="white" stroke="#333" stroke-width="2" rx="5"/>'
-        svg += f'<text x="{x+10}" y="{y+20}" font-size="14" fill="#666">Slot {slot_num}</text>'
+        svg += f'fill="{fill_color}" stroke="{stroke_color}" stroke-width="2" rx="5"/>'
 
-        # Check if labware in this slot
-        for labware in robot_config.get('labware', []):
-            if labware['slot'] == str(slot_num):
-                svg += f'<text x="{x+10}" y="{y+50}" font-size="12" fill="#333">{labware["label"]}</text>'
-                svg += f'<rect x="{x+5}" y="{y+5}" width="{slot_width-20}" height="{slot_height-20}" '
-                svg += 'fill="none" stroke="#4CAF50" stroke-width="2" rx="3"/>'
+        # Draw well pattern if applicable
+        if well_format and 'trash' not in load_name:
+            rows, cols = well_format
+            svg += _draw_well_pattern(
+                x, y, slot_width - 10, slot_height - 10,
+                rows, cols, stroke_color, is_tiprack
+            )
+
+        # Slot number (positioned at top-left)
+        svg += f'<text x="{x+5}" y="{y+12}" font-size="10" font-weight="bold" fill="{stroke_color}">Slot {slot_num}</text>'
+
+        # Labware/module label at bottom
+        if label_text:
+            # Truncate long labels
+            display_label = label_text[:22] + '..' if len(label_text) > 22 else label_text
+            svg += f'<text x="{x+5}" y="{y+slot_height-15}" font-size="9" fill="#333">{display_label}</text>'
 
     svg += '</svg>'
     return svg
