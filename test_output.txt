@@ -1,0 +1,116 @@
+C:\Users\lajamu\.opentrons\robot_settings.json not found. Loading defaults
+Deck calibration not found.
+C:\Users\lajamu\.opentrons\deck_calibration.json not found. Loading defaults
+C:\Users\lajamu\.opentrons\robot_settings.json not found. Loading defaults
+Deck calibration not found.
+C:\Users\lajamu\.opentrons\deck_calibration.json not found. Loading defaults
+Testing protocol parsing...
+Protocol: examples/96wp_liquid.py
+
+DEBUG Step 1: Trying to parse text: Picking up tip from A1 of Opentrons OT-2 96 Tip Rack 300 킠 on slot 11
+  Pattern match: True
+  Groups: well=A1, labware=Opentrons OT-2 96 Tip Rack 300, slot=11
+  Found labware in slot 11: opentrons_96_tiprack_300ul
+DEBUG Step 2: Trying to parse text: Distributing 100.0 from A1 of NEST 1 Well Reservoir 195 mL on slot 10 to A1 of Corning 96 Well Plate
+  Pattern match: True
+  Groups: well=A1, labware=NEST 1 Well Reservoir 195 mL, slot=10
+  Found labware in slot 10: nest_1_reservoir_195ml
+DEBUG Step 3: Trying to parse text: Transferring 100.0 from A1 of NEST 1 Well Reservoir 195 mL on slot 10 to A1 of Corning 96 Well Plate
+  Pattern match: True
+  Groups: well=A1, labware=NEST 1 Well Reservoir 195 mL, slot=10
+  Found labware in slot 10: nest_1_reservoir_195ml
+DEBUG Step 4: Trying to parse text: Aspirating 220.0 uL from A1 of NEST 1 Well Reservoir 195 mL on slot 10 at 94.0 uL/sec
+  Pattern match: True
+  Groups: well=A1, labware=NEST 1 Well Reservoir 195 mL, slot=10
+  Found labware in slot 10: nest_1_reservoir_195ml
+DEBUG Step 5: Trying to parse text: Dispensing 100.0 uL into A1 of Corning 96 Well Plate 360 킠 Flat on slot 1 at 94.0 uL/sec
+  Pattern match: True
+  Groups: well=A1, labware=Corning 96 Well Plate 360 킠 F, slot=1
+  Found labware in slot 1: corning_96_wellplate_360ul_flat
+DEBUG Step 6: Trying to parse text: Dispensing 100.0 uL into A2 of Corning 96 Well Plate 360 킠 Flat on slot 1 at 94.0 uL/sec
+  Pattern match: True
+  Groups: well=A2, labware=Corning 96 Well Plate 360 킠 F, slot=1
+  Found labware in slot 1: corning_96_wellplate_360ul_flat
+DEBUG Step 7: Trying to parse text: Blowing out into Trash Bin on slot 12
+  Pattern match: False
+DEBUG Step 8: Trying to parse text: Aspirating 220.0 uL from A1 of NEST 1 Well Reservoir 195 mL on slot 10 at 94.0 uL/sec
+  Pattern match: True
+  Groups: well=A1, labware=NEST 1 Well Reservoir 195 mL, slot=10
+  Found labware in slot 10: nest_1_reservoir_195ml
+DEBUG Step 9: Trying to parse text: Dispensing 100.0 uL into A3 of Corning 96 Well Plate 360 킠 Flat on slot 1 at 94.0 uL/sec
+  Pattern match: True
+  Groups: well=A3, labware=Corning 96 Well Plate 360 킠 F, slot=1
+  Found labware in slot 1: corning_96_wellplate_360ul_flat
+DEBUG Step 10: Trying to parse text: Dispensing 100.0 uL into A4 of Corning 96 Well Plate 360 킠 Flat on slot 1 at 94.0 uL/sec
+  Pattern match: True
+  Groups: well=A4, labware=Corning 96 Well Plate 360 킠 F, slot=1
+  Found labware in slot 1: corning_96_wellplate_360ul_flat
+[OK] Simulation successful
+
+Total steps: 237
+
+Step 1: type=pick_up_tip
+  source: labware='opentrons_96_tiprack_300ul', well='A1'
+  dest: MISSING
+  text: Picking up tip from A1 of Opentrons OT-2 96 Tip Rack 300 킠 on slot 11...
+
+Step 2: type=other
+  source: MISSING
+  dest: MISSING
+  text: Distributing 100.0 from A1 of NEST 1 Well Reservoir 195 mL on slot 10 to A1 of C...
+
+Step 3: type=other
+  source: MISSING
+  dest: MISSING
+  text: Transferring 100.0 from A1 of NEST 1 Well Reservoir 195 mL on slot 10 to A1 of C...
+
+Step 4: type=aspirate
+  source: labware='nest_1_reservoir_195ml', well='A1'
+  dest: MISSING
+  text: Aspirating 220.0 uL from A1 of NEST 1 Well Reservoir 195 mL on slot 10 at 94.0 u...
+
+Step 5: type=dispense
+  source: MISSING
+  dest: labware='corning_96_wellplate_360ul_flat', well='A1'
+  text: Dispensing 100.0 uL into A1 of Corning 96 Well Plate 360 킠 Flat on slot 1 at 94...
+
+Step 6: type=dispense
+  source: MISSING
+  dest: labware='corning_96_wellplate_360ul_flat', well='A2'
+  text: Dispensing 100.0 uL into A2 of Corning 96 Well Plate 360 킠 Flat on slot 1 at 94...
+
+Step 7: type=other
+  source: MISSING
+  dest: MISSING
+  text: Blowing out into Trash Bin on slot 12...
+
+Step 8: type=aspirate
+  source: labware='nest_1_reservoir_195ml', well='A1'
+  dest: MISSING
+  text: Aspirating 220.0 uL from A1 of NEST 1 Well Reservoir 195 mL on slot 10 at 94.0 u...
+
+Step 9: type=dispense
+  source: MISSING
+  dest: labware='corning_96_wellplate_360ul_flat', well='A3'
+  text: Dispensing 100.0 uL into A3 of Corning 96 Well Plate 360 킠 Flat on slot 1 at 94...
+
+Step 10: type=dispense
+  source: MISSING
+  dest: labware='corning_96_wellplate_360ul_flat', well='A4'
+  text: Dispensing 100.0 uL into A4 of Corning 96 Well Plate 360 킠 Flat on slot 1 at 94...
+
+
+Well coordinates generated for slots:
+  Slot 11: ['opentrons_96_tiprack_300ul']
+  Slot 10: ['nest_1_reservoir_195ml']
+  Slot 1: ['corning_96_wellplate_360ul_flat']
+  Slot 2: ['corning_96_wellplate_360ul_flat']
+  Slot 3: ['corning_96_wellplate_360ul_flat']
+  Slot 4: ['corning_96_wellplate_360ul_flat']
+  Slot 5: ['corning_96_wellplate_360ul_flat']
+  Slot 6: ['corning_96_wellplate_360ul_flat']
+  Slot 7: ['corning_96_wellplate_360ul_flat']
+  Slot 8: ['corning_96_wellplate_360ul_flat']
+  Slot 9: ['corning_96_wellplate_360ul_flat']
+
+[OK] Test complete!

@@ -199,11 +199,11 @@ class ProtocolSimulator:
         """Extract and normalize protocol steps from runlog."""
         self.steps = []
         for idx, log_entry in enumerate(runlog, start=1):
-            step = self._normalize_command(idx, log_entry)
+            step = self._normalize_command(idx, log_entry, self.robot_config)
             if step:
                 self.steps.append(step)
 
-    def _normalize_command(self, idx: int, log_entry: Dict) -> Optional[Dict]:
+    def _normalize_command(self, idx: int, log_entry: Dict, robot_config: Dict = None) -> Optional[Dict]:
         """Normalize a single command into a step."""
         # Get payload from runlog entry
         payload = log_entry.get('payload', {})
@@ -225,63 +225,61 @@ class ProtocolSimulator:
             if hasattr(instrument, 'name'):
                 step['pipette'] = f"{instrument.mount}:{instrument.name}"
 
+        # Try to extract well and labware info for source/dest
+        well = None
+        labware = None
+        import re
+
         if 'location' in payload:
             location = payload['location']
-            # Try to extract well and labware info
-            well = None
-            labware = None
 
-            import re
+            # APPROACH 1: Try to get from location object (most reliable for matching well_coordinates)
+            if hasattr(location, 'labware') and location.labware:
+                labware_or_well = location.labware
 
-            # BEST APPROACH: Parse from text which has clean, reliable format
-            # Examples:
-            #   "Aspirating 50.0 uL from A1 of Reagent Reservoir on slot 2..."
-            #   "Picking up tip from A1 of Tips 300µL on slot 3"
-            #   "Dispensing 50.0 uL into B1 of PCR Plate on slot 1..."
-            if text:
-                # Pattern: "from/to/into WELL of LABWARE"
-                # Match: "from A1 of Reagent Reservoir on slot 2"
-                pattern = r'(?:from|to|into)\s+([A-H]\d{1,2})\s+of\s+(.+?)(?:\s+on\s+slot\s+\d+|\s+at\s+|$)'
-                match = re.search(pattern, text)
-                if match:
+                # Check if it's a string (well ID like "A1")
+                if isinstance(labware_or_well, str):
+                    well = labware_or_well
+                else:
+                    # It's a Well object
+                    if hasattr(labware_or_well, 'well_name'):
+                        well = labware_or_well.well_name
+                    elif hasattr(labware_or_well, 'display_name'):
+                        well = labware_or_well.display_name.split()[0] if labware_or_well.display_name else None
+
+                    # Get parent labware from Well object - USE .name to match well_coordinates
+                    if hasattr(labware_or_well, 'parent'):
+                        labware_obj = labware_or_well.parent
+                        if hasattr(labware_obj, 'name'):
+                            labware = labware_obj.name
+
+        # APPROACH 2: Parse from text as fallback (well, labware, AND slot)
+        # This runs even if there's no location in payload
+        if text and (not well or not labware):
+            # Pattern: "from/to/into WELL of LABWARE on slot N"
+            # Example: "Dispensing 100.0 uL into A2 of Corning 96 Well Plate 360 µL Flat on slot 1"
+            pattern = r'(?:from|to|into)\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+slot\s+(\d+)'
+            match = re.search(pattern, text)
+            if match:
+                if not well:
                     well = match.group(1).strip()
-                    labware = match.group(2).strip()
+                if not labware:
+                    slot_num = match.group(3).strip()
+                    # Look up which labware is in this slot from robot_config
+                    if robot_config and 'labware' in robot_config:
+                        for lw in robot_config['labware']:
+                            if str(lw.get('slot')) == slot_num:
+                                # Found it! Use the labware name (label matches well_coordinates keys)
+                                labware = lw.get('label', lw.get('loadName'))
+                                break
 
-            # Fallback: try location object attributes (if text parsing failed)
-            if not well or not labware:
-                if hasattr(location, 'labware') and location.labware:
-                    labware_or_well = location.labware
-
-                    # Check if it's a string (well ID like "A1")
-                    if isinstance(labware_or_well, str):
-                        well = labware_or_well
-                    else:
-                        # It's a Well object
-                        if hasattr(labware_or_well, 'well_name'):
-                            well = labware_or_well.well_name
-                        elif hasattr(labware_or_well, 'display_name'):
-                            well = labware_or_well.display_name.split()[0] if labware_or_well.display_name else None
-
-                        # Get parent labware from Well object
-                        if hasattr(labware_or_well, 'parent'):
-                            labware_obj = labware_or_well.parent
-                            if hasattr(labware_obj, 'name'):
-                                labware = labware_obj.name
-
-                # If we got a well but no labware, try to get it from text
-                if well and not labware and 'of' in text:
-                    parts = text.split(' of ')
-                    if len(parts) >= 2:
-                        labware_part = parts[1].split(' on ')[0].strip()
-                        labware = labware_part.rstrip('.')
-
-            # Store if we found both
-            if well and labware:
-                # Determine if source or destination based on command type
-                if 'Aspirating' in text or 'Picking up' in text:
-                    step['source'] = {'labware': labware, 'well': well}
-                elif 'Dispensing' in text or 'Dropping' in text:
-                    step['dest'] = {'labware': labware, 'well': well}
+        # Store if we found both
+        if well and labware:
+            # Determine if source or destination based on command type
+            if 'Aspirating' in text or 'Picking up' in text:
+                step['source'] = {'labware': labware, 'well': well}
+            elif 'Dispensing' in text or 'Dropping' in text:
+                step['dest'] = {'labware': labware, 'well': well}
 
         if 'rate' in payload:
             step['flowRateUlS'] = payload.get('volume', 0) * payload['rate'] if 'volume' in payload else None
