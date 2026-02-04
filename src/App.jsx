@@ -10,6 +10,7 @@ function App() {
   const [simulationData, setSimulationData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [currentStepIndex, setCurrentStepIndex] = useState(-1)
 
   const handleSimulate = async (formData) => {
     setLoading(true)
@@ -85,8 +86,16 @@ function App() {
               <DeckVisualization
                 deckSvg={simulationData.deck_svg}
                 deckLayout={simulationData.deck_layout}
+                steps={simulationData.steps}
+                wellCoordinates={simulationData.well_coordinates}
+                currentStepIndex={currentStepIndex}
+                onStepChange={setCurrentStepIndex}
               />
-              <StepsTimeline steps={simulationData.steps} />
+              <StepsTimeline
+                steps={simulationData.steps}
+                currentStepIndex={currentStepIndex}
+                onStepClick={setCurrentStepIndex}
+              />
             </div>
 
             {/* Right Column - Config and Export */}

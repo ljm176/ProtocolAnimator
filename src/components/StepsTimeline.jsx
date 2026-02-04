@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, ChevronUp, Filter, Download } from 'lucide-react'
 
 const STEP_ICONS = {
@@ -21,9 +21,37 @@ const STEP_COLORS = {
   other: 'bg-gray-50 border-gray-300 text-gray-600'
 }
 
-export default function StepsTimeline({ steps }) {
+export default function StepsTimeline({ steps, currentStepIndex = -1, onStepClick }) {
   const [filter, setFilter] = useState('all')
   const [expandedSteps, setExpandedSteps] = useState(new Set())
+  const stepRefs = useRef({})
+  const containerRef = useRef(null)
+  const userClickedRef = useRef(false)
+
+  // Handle step click - mark as user-initiated
+  const handleStepClick = (idx) => {
+    userClickedRef.current = true
+    onStepClick?.(idx)
+  }
+
+  // Auto-scroll only when user clicks a step manually
+  useEffect(() => {
+    if (currentStepIndex >= 0 && stepRefs.current[currentStepIndex] && userClickedRef.current) {
+      const container = containerRef.current
+      const stepElement = stepRefs.current[currentStepIndex]
+
+      if (container && stepElement) {
+        // Scroll within container only
+        stepElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'nearest'
+        })
+      }
+
+      userClickedRef.current = false // Reset flag after scroll
+    }
+  }, [currentStepIndex])
 
   const filteredSteps = filter === 'all'
     ? steps
@@ -88,16 +116,20 @@ export default function StepsTimeline({ steps }) {
       </div>
 
       {/* Steps List */}
-      <div className="space-y-2 max-h-96 overflow-y-auto">
+      <div ref={containerRef} className="space-y-2 max-h-96 overflow-y-auto">
         {filteredSteps.length === 0 ? (
           <p className="text-gray-500 text-center py-8">No steps to display</p>
         ) : (
-          filteredSteps.map((step) => (
+          filteredSteps.map((step, index) => (
             <div
               key={step.idx}
-              className={`border rounded-lg p-3 transition-colors ${
-                STEP_COLORS[step.type] || STEP_COLORS.other
-              }`}
+              ref={(el) => (stepRefs.current[step.idx] = el)}
+              onClick={() => handleStepClick(step.idx)}
+              className={`border rounded-lg p-3 transition-all cursor-pointer ${
+                step.idx === currentStepIndex
+                  ? 'ring-2 ring-blue-500 bg-blue-50 shadow-lg'
+                  : STEP_COLORS[step.type] || STEP_COLORS.other
+              } hover:shadow-md`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1">
