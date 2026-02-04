@@ -1,13 +1,178 @@
-import { useState } from 'react'
-import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ZoomIn, ZoomOut, Maximize2, Play, Pause, SkipForward, SkipBack, RotateCcw } from 'lucide-react'
 
-export default function DeckVisualization({ deckSvg, deckLayout }) {
+export default function DeckVisualization({
+  deckSvg,
+  deckLayout,
+  steps = [],
+  wellCoordinates = {},
+  currentStepIndex,
+  onStepChange
+}) {
   const [zoom, setZoom] = useState(1)
   const [selectedSlot, setSelectedSlot] = useState(null)
+  const [isPlaying, setIsPlaying] = useState(false)
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.2, 2))
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.2, 0.5))
   const handleReset = () => setZoom(1)
+
+  // Animation loop
+  useEffect(() => {
+    if (!isPlaying || !steps.length) return
+
+    const stepDuration = 1600 // ms
+    const timer = setTimeout(() => {
+      if (currentStepIndex < steps.length - 1) {
+        onStepChange?.(currentStepIndex + 1)
+      } else {
+        setIsPlaying(false) // End of protocol
+      }
+    }, stepDuration)
+
+    return () => clearTimeout(timer)
+  }, [isPlaying, currentStepIndex, steps.length, onStepChange])
+
+  // Playback control handlers
+  const handlePlayPause = () => {
+    if (currentStepIndex === -1 || currentStepIndex >= steps.length - 1) {
+      onStepChange?.(0) // Start from beginning
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const handleStepForward = () => {
+    onStepChange?.(Math.min(currentStepIndex + 1, steps.length - 1))
+    setIsPlaying(false)
+  }
+
+  const handleStepBackward = () => {
+    onStepChange?.(Math.max(currentStepIndex - 1, 0))
+    setIsPlaying(false)
+  }
+
+  const handleResetAnimation = () => {
+    onStepChange?.(-1)
+    setIsPlaying(false)
+  }
+
+  // Get well coordinates from mapping
+  const getWellCoordinates = (labwareLabel, wellId) => {
+    for (const slot in wellCoordinates) {
+      if (wellCoordinates[slot][labwareLabel]?.[wellId]) {
+        return wellCoordinates[slot][labwareLabel][wellId]
+      }
+    }
+    return null
+  }
+
+  // Render triangle indicator
+  const renderTriangle = (type, x, y, key) => {
+    const configs = {
+      aspirate: { color: '#10b981', direction: 'up' },
+      dispense: { color: '#ef4444', direction: 'down' },
+      pick_up_tip: { color: '#000000', direction: 'up' },
+      drop_tip: { color: '#000000', direction: 'down' }
+    }
+
+    const config = configs[type] || configs.aspirate
+    const { color, direction } = config
+
+    const points = direction === 'up'
+      ? `${x},${y+8} ${x+6},${y} ${x+12},${y+8}`
+      : `${x},${y} ${x+6},${y+8} ${x+12},${y}`
+
+    return (
+      <polygon
+        key={key}
+        points={points}
+        fill={color}
+        opacity="0.8"
+        style={{ transition: 'opacity 0.4s' }}
+      />
+    )
+  }
+
+  // Render animation indicators for current step
+  const renderAnimationIndicators = () => {
+    if (currentStepIndex < 0 || currentStepIndex >= steps.length) {
+      return null
+    }
+
+    const step = steps[currentStepIndex]
+    const indicators = []
+
+    console.log('Current step:', step)
+    console.log('Well coordinates:', wellCoordinates)
+
+    // Handle source well (aspirate, pick_up_tip)
+    if (step.source?.labware && step.source?.well) {
+      const coords = getWellCoordinates(step.source.labware, step.source.well)
+      console.log(`Looking for source: ${step.source.labware} - ${step.source.well}, found:`, coords)
+      if (coords) {
+        indicators.push(renderTriangle(step.type, coords.x - 6, coords.y - 8, `source-${step.idx}`))
+      }
+    }
+
+    // Handle destination well (dispense, drop_tip)
+    if (step.dest?.labware && step.dest?.well) {
+      const coords = getWellCoordinates(step.dest.labware, step.dest.well)
+      console.log(`Looking for dest: ${step.dest.labware} - ${step.dest.well}, found:`, coords)
+      if (coords) {
+        const destType = step.type.includes('drop') ? 'drop_tip' : 'dispense'
+        indicators.push(renderTriangle(destType, coords.x - 6, coords.y - 8, `dest-${step.idx}`))
+      }
+    }
+
+    // Handle module operations (pulse slot border)
+    if (step.type && step.type.startsWith('module.')) {
+      // Extract module info from step
+      const moduleName = step.module
+      if (moduleName) {
+        // Find module slot from wellCoordinates keys or module name
+        // For now, check if any slot has module-related labware
+        for (const slot in wellCoordinates) {
+          const slotLabware = Object.keys(wellCoordinates[slot])
+          // If module command references a slot or labware
+          if (moduleName.includes(slot) || slotLabware.some(lw => moduleName.includes(lw))) {
+            indicators.push(renderModulePulse(parseInt(slot), `module-${step.idx}`))
+            break
+          }
+        }
+      }
+    }
+
+    return indicators
+  }
+
+  // Render module pulse animation
+  const renderModulePulse = (slotNumber, key) => {
+    // Calculate slot position (same logic as generate_deck_svg)
+    const slot_width = 200
+    const slot_height = 120
+    const margin = 50
+
+    const slot_index = slotNumber - 1
+    const row = 3 - Math.floor(slot_index / 3) // Flip vertically
+    const col = slot_index % 3
+    const slot_x = margin + col * slot_width
+    const slot_y = margin + row * slot_height
+
+    return (
+      <rect
+        key={key}
+        x={slot_x}
+        y={slot_y}
+        width={190}
+        height={110}
+        fill="none"
+        stroke="#3b82f6"
+        strokeWidth="3"
+        opacity="0.6"
+        className="animate-pulse"
+      />
+    )
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -38,13 +203,73 @@ export default function DeckVisualization({ deckSvg, deckLayout }) {
         </div>
       </div>
 
+      {/* Playback Controls */}
+      {steps.length > 0 && (
+        <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+          <button
+            onClick={handlePlayPause}
+            className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            title={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+          </button>
+
+          <button
+            onClick={handleStepBackward}
+            className="p-2 hover:bg-gray-200 rounded transition-colors"
+            title="Step Backward"
+            disabled={currentStepIndex <= 0}
+          >
+            <SkipBack size={20} />
+          </button>
+
+          <button
+            onClick={handleStepForward}
+            className="p-2 hover:bg-gray-200 rounded transition-colors"
+            title="Step Forward"
+            disabled={currentStepIndex >= steps.length - 1}
+          >
+            <SkipForward size={20} />
+          </button>
+
+          <button
+            onClick={handleResetAnimation}
+            className="p-2 hover:bg-gray-200 rounded transition-colors"
+            title="Reset"
+          >
+            <RotateCcw size={20} />
+          </button>
+
+          <div className="text-sm text-gray-600 ml-auto">
+            {currentStepIndex >= 0
+              ? `Step ${currentStepIndex + 1} / ${steps.length}`
+              : `${steps.length} steps`
+            }
+          </div>
+        </div>
+      )}
+
       {/* SVG Display */}
       <div className="border border-gray-200 rounded-lg overflow-auto bg-gray-50 p-4">
         <div
-          className="transition-transform origin-top-left"
+          className="transition-transform origin-top-left relative"
           style={{ transform: `scale(${zoom})` }}
-          dangerouslySetInnerHTML={{ __html: deckSvg }}
-        />
+        >
+          {/* Static deck SVG */}
+          <div dangerouslySetInnerHTML={{ __html: deckSvg }} />
+
+          {/* Animation overlay layer */}
+          <svg
+            width="800"
+            height="600"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+          >
+            <g id="animation-layer">
+              {renderAnimationIndicators()}
+            </g>
+          </svg>
+        </div>
       </div>
 
       {/* Deck Info */}

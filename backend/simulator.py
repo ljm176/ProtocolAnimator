@@ -228,18 +228,60 @@ class ProtocolSimulator:
         if 'location' in payload:
             location = payload['location']
             # Try to extract well and labware info
-            location_str = str(location)
-            if 'of' in location_str:
-                parts = location_str.split(' of ')
-                if len(parts) >= 2:
-                    well = parts[0].strip()
-                    labware = parts[1].split(' on slot ')[0].strip() if ' on slot ' in parts[1] else parts[1].strip()
+            well = None
+            labware = None
 
-                    # Determine if source or destination based on command type
-                    if 'Aspirating' in text or 'Picking up' in text:
-                        step['source'] = {'labware': labware, 'well': well}
-                    elif 'Dispensing' in text or 'Dropping' in text:
-                        step['dest'] = {'labware': labware, 'well': well}
+            import re
+
+            # BEST APPROACH: Parse from text which has clean, reliable format
+            # Examples:
+            #   "Aspirating 50.0 uL from A1 of Reagent Reservoir on slot 2..."
+            #   "Picking up tip from A1 of Tips 300µL on slot 3"
+            #   "Dispensing 50.0 uL into B1 of PCR Plate on slot 1..."
+            if text:
+                # Pattern: "from/to/into WELL of LABWARE"
+                # Match: "from A1 of Reagent Reservoir on slot 2"
+                pattern = r'(?:from|to|into)\s+([A-H]\d{1,2})\s+of\s+(.+?)(?:\s+on\s+slot\s+\d+|\s+at\s+|$)'
+                match = re.search(pattern, text)
+                if match:
+                    well = match.group(1).strip()
+                    labware = match.group(2).strip()
+
+            # Fallback: try location object attributes (if text parsing failed)
+            if not well or not labware:
+                if hasattr(location, 'labware') and location.labware:
+                    labware_or_well = location.labware
+
+                    # Check if it's a string (well ID like "A1")
+                    if isinstance(labware_or_well, str):
+                        well = labware_or_well
+                    else:
+                        # It's a Well object
+                        if hasattr(labware_or_well, 'well_name'):
+                            well = labware_or_well.well_name
+                        elif hasattr(labware_or_well, 'display_name'):
+                            well = labware_or_well.display_name.split()[0] if labware_or_well.display_name else None
+
+                        # Get parent labware from Well object
+                        if hasattr(labware_or_well, 'parent'):
+                            labware_obj = labware_or_well.parent
+                            if hasattr(labware_obj, 'name'):
+                                labware = labware_obj.name
+
+                # If we got a well but no labware, try to get it from text
+                if well and not labware and 'of' in text:
+                    parts = text.split(' of ')
+                    if len(parts) >= 2:
+                        labware_part = parts[1].split(' on ')[0].strip()
+                        labware = labware_part.rstrip('.')
+
+            # Store if we found both
+            if well and labware:
+                # Determine if source or destination based on command type
+                if 'Aspirating' in text or 'Picking up' in text:
+                    step['source'] = {'labware': labware, 'well': well}
+                elif 'Dispensing' in text or 'Dropping' in text:
+                    step['dest'] = {'labware': labware, 'well': well}
 
         if 'rate' in payload:
             step['flowRateUlS'] = payload.get('volume', 0) * payload['rate'] if 'volume' in payload else None
@@ -353,32 +395,33 @@ def _draw_well_pattern(x: int, y: int, width: int, height: int,
     svg = ''
 
     # Calculate well dimensions with padding
-    padding_x = 15
-    padding_y = 25  # Extra top padding for slot label
-    padding_bottom = 8
+    # Top padding for slot label, side padding for margins, bottom padding for labware name
+    padding_top = 18
+    padding_bottom = 18
+    padding_x = 20
 
     available_width = width - (padding_x * 2)
-    available_height = height - padding_y - padding_bottom
+    available_height = height - padding_top - padding_bottom
 
     # Calculate spacing
     cell_width = available_width / cols
     cell_height = available_height / rows
 
-    # Well radius (smaller of cell dimensions, with margin)
-    radius = min(cell_width, cell_height) * 0.35
+    # Well radius - slightly larger for better visibility
+    radius = min(cell_width, cell_height) * 0.38
 
     # For tipracks, use slightly different styling
     if is_tiprack:
-        stroke_width = 0.8
-        fill_opacity = 0.3
+        stroke_width = 1.0
+        fill_opacity = 0.4
     else:
-        stroke_width = 0.5
-        fill_opacity = 0.1
+        stroke_width = 0.7
+        fill_opacity = 0.15
 
     for row in range(rows):
         for col in range(cols):
             cx = x + padding_x + (col + 0.5) * cell_width
-            cy = y + padding_y + (row + 0.5) * cell_height
+            cy = y + padding_top + (row + 0.5) * cell_height
 
             svg += f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{radius:.1f}" '
             svg += f'fill="{well_color}" fill-opacity="{fill_opacity}" '
@@ -483,6 +526,87 @@ def generate_deck_svg(robot_config: Dict) -> str:
 
     svg += '</svg>'
     return svg
+
+
+def generate_well_coordinates(robot_config: Dict) -> Dict:
+    """
+    Generate SVG coordinate mapping for all wells in all labware.
+    Returns: {slot: {labware_label: {well_id: {x, y}}}}
+    """
+    coordinates = {}
+
+    # Deck layout constants (match generate_deck_svg)
+    slot_width = 200
+    slot_height = 120
+    margin = 50
+
+    # Well pattern constants (match _draw_well_pattern)
+    padding_top = 18
+    padding_bottom = 18
+    padding_x = 20
+
+    # Build module lookup
+    modules = {str(m['slot']): m for m in robot_config.get('modules', [])}
+
+    for labware in robot_config.get('labware', []):
+        slot_str = labware['slot']
+        slot_num = int(slot_str)
+        label = labware.get('label', 'Unknown')
+        load_name = labware.get('loadName', '').lower()
+
+        # Skip trash
+        if 'trash' in load_name:
+            continue
+
+        # Calculate slot position (same logic as generate_deck_svg)
+        slot_index = slot_num - 1
+        row = 3 - (slot_index // 3)  # Flip vertically
+        col = slot_index % 3
+        slot_x = margin + col * slot_width
+        slot_y = margin + row * slot_height
+
+        # Detect well format
+        well_format = _detect_well_format(load_name)
+        if not well_format:
+            # Can't map wells without format
+            continue
+
+        rows, cols = well_format
+
+        # Calculate available space (same as _draw_well_pattern)
+        slot_inner_width = slot_width - 10  # Account for border
+        slot_inner_height = slot_height - 10
+        available_width = slot_inner_width - (padding_x * 2)
+        available_height = slot_inner_height - padding_top - padding_bottom
+
+        cell_width = available_width / cols
+        cell_height = available_height / rows
+
+        # Generate coordinates for each well
+        well_coords = {}
+
+        for row_idx in range(rows):
+            for col_idx in range(cols):
+                # Generate well ID (A1, A2, B1, etc.)
+                row_letter = chr(ord('A') + row_idx)
+                col_number = col_idx + 1
+                well_id = f"{row_letter}{col_number}"
+
+                # Calculate well center position
+                well_x = slot_x + padding_x + (col_idx + 0.5) * cell_width
+                well_y = slot_y + padding_top + (row_idx + 0.5) * cell_height
+
+                well_coords[well_id] = {
+                    'x': round(well_x, 2),
+                    'y': round(well_y, 2)
+                }
+
+        # Store coordinates by slot and labware label
+        if slot_str not in coordinates:
+            coordinates[slot_str] = {}
+        coordinates[slot_str][label] = well_coords
+
+    return coordinates
 
 
 def generate_report(robot_config: Dict, steps: List[Dict], output_dir: Path) -> str:

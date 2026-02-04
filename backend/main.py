@@ -11,7 +11,7 @@ import json
 import tempfile
 import shutil
 from typing import Optional
-from simulator import ProtocolSimulator, generate_deck_svg, generate_report
+from simulator import ProtocolSimulator, generate_deck_svg, generate_report, generate_well_coordinates
 
 
 def run_simulation_sync(protocol_path: str, metadata_dict: dict) -> dict:
@@ -89,6 +89,9 @@ async def simulate_protocol(
         # Generate deck SVG
         deck_svg = generate_deck_svg(result['robot_config'])
 
+        # Generate well coordinates for animation
+        well_coordinates = generate_well_coordinates(result['robot_config'])
+
         # Generate report
         output_dir = TEMP_DIR / "output"
         output_dir.mkdir(exist_ok=True)
@@ -98,6 +101,7 @@ async def simulate_protocol(
         robot_json_path = output_dir / "robot.json"
         steps_json_path = output_dir / "steps.json"
         deck_svg_path = output_dir / "deck.svg"
+        well_coordinates_path = output_dir / "well_coordinates.json"
         report_path = output_dir / "report.md"
 
         with robot_json_path.open('w') as f:
@@ -109,6 +113,9 @@ async def simulate_protocol(
         with deck_svg_path.open('w') as f:
             f.write(deck_svg)
 
+        with well_coordinates_path.open('w') as f:
+            json.dump(well_coordinates, f, indent=2)
+
         with report_path.open('w') as f:
             f.write(report_md)
 
@@ -118,10 +125,12 @@ async def simulate_protocol(
             'steps': result['steps'],
             'deck_layout': result['deck_layout'],
             'deck_svg': deck_svg,
+            'well_coordinates': well_coordinates,
             'report': report_md,
             'artifact_paths': {
                 'robot_json': str(robot_json_path),
                 'steps_json': str(steps_json_path),
+                'well_coordinates': str(well_coordinates_path),
                 'deck_svg': str(deck_svg_path),
                 'report': str(report_path)
             }
@@ -152,6 +161,7 @@ async def download_artifact(artifact_type: str):
         'robot_json': output_dir / 'robot.json',
         'steps_json': output_dir / 'steps.json',
         'deck_svg': output_dir / 'deck.svg',
+        'well_coordinates': output_dir / 'well_coordinates.json',
         'report': output_dir / 'report.md'
     }
 
