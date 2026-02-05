@@ -6,6 +6,7 @@ export default function DeckVisualization({
   deckLayout,
   steps = [],
   wellCoordinates = {},
+  pipettes = [],
   currentStepIndex,
   onStepChange
 }) {
@@ -66,11 +67,83 @@ export default function DeckVisualization({
     return null
   }
 
+  const getLabwareInfo = (labwareLabel) => {
+    for (const slot in wellCoordinates) {
+      const labwareMap = wellCoordinates[slot][labwareLabel]
+      if (labwareMap) {
+        const wellIds = Object.keys(labwareMap)
+        const rowSet = new Set()
+        let maxCol = 0
+
+        for (const wellId of wellIds) {
+          const match = wellId.match(/^([A-Z]+)(\d+)$/)
+          if (!match) continue
+          const row = match[1]
+          const col = parseInt(match[2], 10)
+          rowSet.add(row)
+          if (col > maxCol) maxCol = col
+        }
+
+        const rowLetters = Array.from(rowSet).sort((a, b) => a.localeCompare(b))
+        return {
+          wellMap: labwareMap,
+          rowLetters,
+          rows: rowLetters.length,
+          cols: maxCol
+        }
+      }
+    }
+    return null
+  }
+
+  const getPipetteChannels = (step) => {
+    if (!step?.pipette) return 1
+    const parts = step.pipette.split(':')
+    const pipetteName = parts.length > 1 ? parts[1] : step.pipette
+    const match = pipettes.find(p => p.name === pipetteName)
+    if (match?.channels) return match.channels
+    if (pipetteName.toLowerCase().includes('multi')) return 8
+    return 1
+  }
+
+  const expandWellTargets = (labwareLabel, wellId, isMulti) => {
+    const info = getLabwareInfo(labwareLabel)
+    if (!info) return [wellId]
+
+    const isReservoir = labwareLabel.toLowerCase().includes('reservoir')
+    if (isReservoir) {
+      return Object.keys(info.wellMap)
+    }
+
+    if (!isMulti) return [wellId]
+
+    const match = wellId.match(/^([A-Z]+)(\d+)$/)
+    if (!match) return [wellId]
+
+    const targetRow = match[1]
+    const targetCol = match[2]
+
+    if (info.rows === 16 && info.cols === 24) {
+      const rowIndex = info.rowLetters.indexOf(targetRow)
+      const parity = rowIndex >= 0 ? rowIndex % 2 : 0
+      return info.rowLetters
+        .filter((_, idx) => idx % 2 === parity)
+        .map(row => `${row}${targetCol}`)
+        .filter(id => info.wellMap[id])
+    }
+
+    return info.rowLetters
+      .map(row => `${row}${targetCol}`)
+      .filter(id => info.wellMap[id])
+  }
+
   // Render triangle indicator
   const renderTriangle = (type, x, y, key) => {
     const configs = {
       aspirate: { color: '#10b981', direction: 'up' },
       dispense: { color: '#ef4444', direction: 'down' },
+      distribute: { color: '#10b981', direction: 'up' },
+      transfer: { color: '#10b981', direction: 'up' },
       pick_up_tip: { color: '#000000', direction: 'up' },
       drop_tip: { color: '#000000', direction: 'down' }
     }
@@ -101,26 +174,34 @@ export default function DeckVisualization({
 
     const step = steps[currentStepIndex]
     const indicators = []
+    const channels = getPipetteChannels(step)
+    const isMulti = channels >= 8
 
     console.log('Current step:', step)
     console.log('Well coordinates:', wellCoordinates)
 
     // Handle source well (aspirate, pick_up_tip)
     if (step.source?.labware && step.source?.well) {
-      const coords = getWellCoordinates(step.source.labware, step.source.well)
-      console.log(`Looking for source: ${step.source.labware} - ${step.source.well}, found:`, coords)
-      if (coords) {
-        indicators.push(renderTriangle(step.type, coords.x - 6, coords.y - 8, `source-${step.idx}`))
+      const wells = expandWellTargets(step.source.labware, step.source.well, isMulti)
+      for (const wellId of wells) {
+        const coords = getWellCoordinates(step.source.labware, wellId)
+        console.log(`Looking for source: ${step.source.labware} - ${wellId}, found:`, coords)
+        if (coords) {
+          indicators.push(renderTriangle(step.type, coords.x - 6, coords.y - 8, `source-${step.idx}-${wellId}`))
+        }
       }
     }
 
     // Handle destination well (dispense, drop_tip)
     if (step.dest?.labware && step.dest?.well) {
-      const coords = getWellCoordinates(step.dest.labware, step.dest.well)
-      console.log(`Looking for dest: ${step.dest.labware} - ${step.dest.well}, found:`, coords)
-      if (coords) {
-        const destType = step.type.includes('drop') ? 'drop_tip' : 'dispense'
-        indicators.push(renderTriangle(destType, coords.x - 6, coords.y - 8, `dest-${step.idx}`))
+      const wells = expandWellTargets(step.dest.labware, step.dest.well, isMulti)
+      for (const wellId of wells) {
+        const coords = getWellCoordinates(step.dest.labware, wellId)
+        console.log(`Looking for dest: ${step.dest.labware} - ${wellId}, found:`, coords)
+        if (coords) {
+          const destType = step.type.includes('drop') ? 'drop_tip' : 'dispense'
+          indicators.push(renderTriangle(destType, coords.x - 6, coords.y - 8, `dest-${step.idx}-${wellId}`))
+        }
       }
     }
 

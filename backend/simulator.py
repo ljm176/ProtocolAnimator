@@ -230,6 +230,34 @@ class ProtocolSimulator:
         labware = None
         import re
 
+        def _resolve_labware_by_slot(slot_num: str) -> Optional[str]:
+            if not robot_config or 'labware' not in robot_config:
+                return None
+            for lw in robot_config['labware']:
+                if str(lw.get('slot')) == str(slot_num):
+                    return lw.get('label', lw.get('loadName'))
+            return None
+
+        def _normalize_labware_text(value: Optional[str]) -> str:
+            if not value:
+                return ''
+            return re.sub(r'[^a-z0-9]+', '', value.lower())
+
+        def _resolve_labware_by_text(labware_text: str) -> Optional[str]:
+            if not robot_config or 'labware' not in robot_config:
+                return None
+            target = _normalize_labware_text(labware_text)
+            if not target:
+                return None
+            for lw in robot_config['labware']:
+                label = _normalize_labware_text(lw.get('label', ''))
+                load = _normalize_labware_text(lw.get('loadName', ''))
+                if label and label in target:
+                    return lw.get('label', lw.get('loadName'))
+                if load and load in target:
+                    return lw.get('label', lw.get('loadName'))
+            return None
+
         if 'location' in payload:
             location = payload['location']
 
@@ -273,8 +301,47 @@ class ProtocolSimulator:
                                 labware = lw.get('label', lw.get('loadName'))
                                 break
 
+        text_lower = text.lower()
+        is_distribute_transfer = 'distributing' in text_lower or 'distribute' in text_lower or 'transferring' in text_lower or 'transfer' in text_lower
+
+        if text and is_distribute_transfer:
+            source_match = re.search(
+                r'from\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+slot\s+(\d+)',
+                text,
+                re.IGNORECASE
+            )
+            if source_match and 'source' not in step:
+                source_well = source_match.group(1).strip()
+                source_slot = source_match.group(3).strip()
+                source_labware = _resolve_labware_by_slot(source_slot)
+                if source_labware:
+                    step['source'] = {'labware': source_labware, 'well': source_well}
+
+            dest_match = re.search(
+                r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+slot\s+(\d+)',
+                text,
+                re.IGNORECASE
+            )
+            if not dest_match:
+                dest_match = re.search(
+                    r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+)$',
+                    text,
+                    re.IGNORECASE
+                )
+
+            if dest_match and 'dest' not in step:
+                dest_well = dest_match.group(1).strip()
+                dest_labware_text = dest_match.group(2).strip()
+                dest_slot = dest_match.group(3) if dest_match.lastindex and dest_match.lastindex >= 3 else None
+                if dest_slot:
+                    dest_labware = _resolve_labware_by_slot(dest_slot)
+                else:
+                    dest_labware = _resolve_labware_by_text(dest_labware_text)
+                if dest_labware:
+                    step['dest'] = {'labware': dest_labware, 'well': dest_well}
+
         # Store if we found both
-        if well and labware:
+        if not is_distribute_transfer and well and labware:
             # Determine if source or destination based on command type
             if 'Aspirating' in text or 'Picking up' in text:
                 step['source'] = {'labware': labware, 'well': well}
@@ -285,7 +352,6 @@ class ProtocolSimulator:
             step['flowRateUlS'] = payload.get('volume', 0) * payload['rate'] if 'volume' in payload else None
 
         # Determine step type from text
-        text_lower = text.lower()
         if 'aspirating' in text_lower or 'aspirate' in text_lower:
             step['type'] = 'aspirate'
         elif 'dispensing' in text_lower or 'dispense' in text_lower:
@@ -294,6 +360,10 @@ class ProtocolSimulator:
             step['type'] = 'pick_up_tip'
         elif 'dropping tip' in text_lower or 'drop tip' in text_lower:
             step['type'] = 'drop_tip'
+        elif 'distributing' in text_lower or 'distribute' in text_lower:
+            step['type'] = 'distribute'
+        elif 'transferring' in text_lower or 'transfer' in text_lower:
+            step['type'] = 'transfer'
         elif 'mixing' in text_lower or 'mix' in text_lower:
             step['type'] = 'mix'
         elif 'temperature' in text_lower or 'temp' in text_lower:
@@ -386,7 +456,8 @@ def _detect_well_format(load_name: str) -> tuple:
 
 
 def _draw_well_pattern(x: int, y: int, width: int, height: int,
-                       rows: int, cols: int, well_color: str, is_tiprack: bool = False) -> str:
+                       rows: int, cols: int, well_color: str, is_tiprack: bool = False,
+                       is_reservoir: bool = False) -> str:
     """
     Generate SVG for a well/tip pattern inside a slot.
     """
@@ -408,22 +479,34 @@ def _draw_well_pattern(x: int, y: int, width: int, height: int,
     # Well radius - slightly larger for better visibility
     radius = min(cell_width, cell_height) * 0.38
 
-    # For tipracks, use slightly different styling
+    # For tipracks/reservoirs, use slightly different styling
     if is_tiprack:
         stroke_width = 1.0
         fill_opacity = 0.4
+    elif is_reservoir:
+        stroke_width = 1.0
+        fill_opacity = 0.2
     else:
         stroke_width = 0.7
         fill_opacity = 0.15
 
     for row in range(rows):
         for col in range(cols):
-            cx = x + padding_x + (col + 0.5) * cell_width
-            cy = y + padding_top + (row + 0.5) * cell_height
+            if is_reservoir:
+                rect_x = x + padding_x + col * cell_width + 1
+                rect_y = y + padding_top + row * cell_height + 1
+                rect_w = max(cell_width - 2, 1)
+                rect_h = max(cell_height - 2, 1)
+                svg += f'<rect x="{rect_x:.1f}" y="{rect_y:.1f}" width="{rect_w:.1f}" height="{rect_h:.1f}" '
+                svg += f'fill="{well_color}" fill-opacity="{fill_opacity}" '
+                svg += f'stroke="{well_color}" stroke-width="{stroke_width}" rx="3"/>'
+            else:
+                cx = x + padding_x + (col + 0.5) * cell_width
+                cy = y + padding_top + (row + 0.5) * cell_height
 
-            svg += f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{radius:.1f}" '
-            svg += f'fill="{well_color}" fill-opacity="{fill_opacity}" '
-            svg += f'stroke="{well_color}" stroke-width="{stroke_width}"/>'
+                svg += f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{radius:.1f}" '
+                svg += f'fill="{well_color}" fill-opacity="{fill_opacity}" '
+                svg += f'stroke="{well_color}" stroke-width="{stroke_width}"/>'
 
     return svg
 
@@ -468,6 +551,7 @@ def generate_deck_svg(robot_config: Dict) -> str:
         label_text = None
         well_format = None
         is_tiprack = False
+        is_reservoir = False
         load_name = ''
 
         if has_module:
@@ -481,11 +565,13 @@ def generate_deck_svg(robot_config: Dict) -> str:
                 load_name = nested_lw.get('loadName', '').lower()
                 well_format = _detect_well_format(load_name)
                 is_tiprack = 'tiprack' in load_name or 'tip_rack' in load_name
+                is_reservoir = 'reservoir' in load_name
         elif slot_labware:
             lw = slot_labware[0]  # Primary labware in slot
             load_name = lw.get('loadName', '').lower()
             label_text = lw.get('label', lw.get('loadName', 'Unknown'))
             well_format = _detect_well_format(load_name)
+            is_reservoir = 'reservoir' in load_name
 
             if 'tiprack' in load_name or 'tip_rack' in load_name:
                 # Tiprack - green
@@ -510,7 +596,7 @@ def generate_deck_svg(robot_config: Dict) -> str:
             rows, cols = well_format
             svg += _draw_well_pattern(
                 x, y, slot_width - 10, slot_height - 10,
-                rows, cols, stroke_color, is_tiprack
+                rows, cols, stroke_color, is_tiprack, is_reservoir
             )
 
         # Slot number (positioned at top-left)

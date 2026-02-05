@@ -123,10 +123,10 @@ export default function StepsTimeline({ steps, currentStepIndex = -1, onStepClic
           filteredSteps.map((step, index) => (
             <div
               key={step.idx}
-              ref={(el) => (stepRefs.current[step.idx] = el)}
-              onClick={() => handleStepClick(step.idx)}
+              ref={(el) => (stepRefs.current[index] = el)}
+              onClick={() => handleStepClick(index)}
               className={`border rounded-lg p-3 transition-all cursor-pointer ${
-                step.idx === currentStepIndex
+                index === currentStepIndex
                   ? 'ring-2 ring-blue-500 bg-blue-50 shadow-lg'
                   : STEP_COLORS[step.type] || STEP_COLORS.other
               } hover:shadow-md`}

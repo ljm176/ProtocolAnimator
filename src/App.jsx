@@ -88,6 +88,7 @@ function App() {
                 deckLayout={simulationData.deck_layout}
                 steps={simulationData.steps}
                 wellCoordinates={simulationData.well_coordinates}
+                pipettes={simulationData.robot_config?.pipettes || []}
                 currentStepIndex={currentStepIndex}
                 onStepChange={setCurrentStepIndex}
               />
