@@ -110,12 +110,15 @@ export default function DeckVisualization({
     const info = getLabwareInfo(labwareLabel)
     if (!info) return [wellId]
 
+    // For single-channel pipettes, always just return the target well
+    if (!isMulti) return [wellId]
+
+    // For reservoirs with multichannel, the special rendering handles it
+    // Just return the target well here (multichannel reservoir spread is in renderAnimationIndicators)
     const isReservoir = labwareLabel.toLowerCase().includes('reservoir')
     if (isReservoir) {
-      return Object.keys(info.wellMap)
+      return [wellId]
     }
-
-    if (!isMulti) return [wellId]
 
     const match = wellId.match(/^([A-Z]+)(\d+)$/)
     if (!match) return [wellId]
@@ -135,6 +138,47 @@ export default function DeckVisualization({
     return info.rowLetters
       .map(row => `${row}${targetCol}`)
       .filter(id => info.wellMap[id])
+  }
+
+  // Generate multiple tip positions for multichannel pipette on single-well reservoir
+  const getMultichannelReservoirPositions = (baseCoords, channels = 8) => {
+    // Spread tips vertically across the reservoir well
+    // Reservoir wells are tall troughs - tips are spaced ~9mm apart (roughly 7px in our scale)
+    const tipSpacing = 7
+    const totalHeight = tipSpacing * (channels - 1)
+    const startY = baseCoords.y - totalHeight / 2
+
+    return Array.from({ length: channels }, (_, i) => ({
+      x: baseCoords.x,
+      y: startY + i * tipSpacing
+    }))
+  }
+
+  // Check if labware is a reservoir (single row of troughs)
+  // For reservoirs, multichannel tips all go into the same trough column
+  const isReservoirLabware = (labwareLabel) => {
+    const info = getLabwareInfo(labwareLabel)
+    if (!info) return false
+    const isReservoir = labwareLabel.toLowerCase().includes('reservoir')
+    // Reservoirs have 1 row (all troughs in a single row: A1, A2, ... A12)
+    return isReservoir && info.rows === 1
+  }
+
+  // Check if labware is trash
+  const isTrashLabware = (labwareLabel) => {
+    return labwareLabel?.toLowerCase().includes('trash')
+  }
+
+  // Get fixed coordinates for trash (slot 12)
+  // Slot 12: row 0 (top), col 2 (right) in the deck grid
+  const getTrashCoordinates = () => {
+    const slot_width = 200
+    const slot_height = 120
+    const margin = 50
+    // Slot 12 position
+    const x = margin + 2 * slot_width + slot_width / 2 - 5  // Center of slot 12
+    const y = margin + 0 * slot_height + slot_height / 2    // Center vertically
+    return { x, y }
   }
 
   // Render triangle indicator
@@ -177,30 +221,68 @@ export default function DeckVisualization({
     const channels = getPipetteChannels(step)
     const isMulti = channels >= 8
 
-    console.log('Current step:', step)
-    console.log('Well coordinates:', wellCoordinates)
+    // Determine what to show based on step type
+    // - aspirate/pick_up_tip: show source only (taking from a location)
+    // - dispense/drop_tip: show dest only (putting to a location)
+    // - transfer/distribute: skip - these are summary steps,
+    //   the actual aspirate/dispense sub-steps will show the real action
+    const sourceTypes = ['aspirate', 'pick_up_tip']
+    const destTypes = ['dispense', 'drop_tip']
+    const skipTypes = ['transfer', 'distribute']
+
+    const showSource = sourceTypes.includes(step.type)
+    const showDest = destTypes.includes(step.type)
+
+    // Skip transfer/distribute - they're summary steps
+    if (skipTypes.includes(step.type)) {
+      return null
+    }
 
     // Handle source well (aspirate, pick_up_tip)
-    if (step.source?.labware && step.source?.well) {
-      const wells = expandWellTargets(step.source.labware, step.source.well, isMulti)
-      for (const wellId of wells) {
-        const coords = getWellCoordinates(step.source.labware, wellId)
-        console.log(`Looking for source: ${step.source.labware} - ${wellId}, found:`, coords)
-        if (coords) {
-          indicators.push(renderTriangle(step.type, coords.x - 6, coords.y - 8, `source-${step.idx}-${wellId}`))
+    if (showSource && step.source?.labware && step.source?.well) {
+      // Check for multichannel + single-well reservoir special case
+      if (isMulti && isReservoirLabware(step.source.labware)) {
+        const baseCoords = getWellCoordinates(step.source.labware, step.source.well)
+        if (baseCoords) {
+          const positions = getMultichannelReservoirPositions(baseCoords, channels)
+          positions.forEach((pos, i) => {
+            indicators.push(renderTriangle(step.type, pos.x - 6, pos.y - 8, `source-${step.idx}-tip${i}`))
+          })
+        }
+      } else {
+        const wells = expandWellTargets(step.source.labware, step.source.well, isMulti)
+        for (const wellId of wells) {
+          const coords = getWellCoordinates(step.source.labware, wellId)
+          if (coords) {
+            indicators.push(renderTriangle(step.type, coords.x - 6, coords.y - 8, `source-${step.idx}-${wellId}`))
+          }
         }
       }
     }
 
     // Handle destination well (dispense, drop_tip)
-    if (step.dest?.labware && step.dest?.well) {
-      const wells = expandWellTargets(step.dest.labware, step.dest.well, isMulti)
-      for (const wellId of wells) {
-        const coords = getWellCoordinates(step.dest.labware, wellId)
-        console.log(`Looking for dest: ${step.dest.labware} - ${wellId}, found:`, coords)
-        if (coords) {
-          const destType = step.type.includes('drop') ? 'drop_tip' : 'dispense'
-          indicators.push(renderTriangle(destType, coords.x - 6, coords.y - 8, `dest-${step.idx}-${wellId}`))
+    if (showDest && step.dest?.labware && step.dest?.well) {
+      // Special case: dropping tip to trash
+      if (isTrashLabware(step.dest.labware)) {
+        const trashCoords = getTrashCoordinates()
+        indicators.push(renderTriangle('drop_tip', trashCoords.x - 6, trashCoords.y - 8, `dest-${step.idx}-trash`))
+      }
+      // Check for multichannel + reservoir special case
+      else if (isMulti && isReservoirLabware(step.dest.labware)) {
+        const baseCoords = getWellCoordinates(step.dest.labware, step.dest.well)
+        if (baseCoords) {
+          const positions = getMultichannelReservoirPositions(baseCoords, channels)
+          positions.forEach((pos, i) => {
+            indicators.push(renderTriangle(step.type, pos.x - 6, pos.y - 8, `dest-${step.idx}-tip${i}`))
+          })
+        }
+      } else {
+        const wells = expandWellTargets(step.dest.labware, step.dest.well, isMulti)
+        for (const wellId of wells) {
+          const coords = getWellCoordinates(step.dest.labware, wellId)
+          if (coords) {
+            indicators.push(renderTriangle(step.type, coords.x - 6, coords.y - 8, `dest-${step.idx}-${wellId}`))
+          }
         }
       }
     }

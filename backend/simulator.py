@@ -284,9 +284,10 @@ class ProtocolSimulator:
         # APPROACH 2: Parse from text as fallback (well, labware, AND slot)
         # This runs even if there's no location in payload
         if text and (not well or not labware):
-            # Pattern: "from/to/into WELL of LABWARE on slot N"
-            # Example: "Dispensing 100.0 uL into A2 of Corning 96 Well Plate 360 µL Flat on slot 1"
-            pattern = r'(?:from|to|into)\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+slot\s+(\d+)'
+            # Pattern: "from/to/into WELL of LABWARE on [slot] N"
+            # Example: "Dispensing 100.0 uL into A2 of Corning 96 Well Plate 360 µL Flat on 1"
+            # Note: Some API versions say "on slot N", others just "on N"
+            pattern = r'(?:from|to|into)\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?(\d+)'
             match = re.search(pattern, text)
             if match:
                 if not well:
@@ -305,40 +306,40 @@ class ProtocolSimulator:
         is_distribute_transfer = 'distributing' in text_lower or 'distribute' in text_lower or 'transferring' in text_lower or 'transfer' in text_lower
 
         if text and is_distribute_transfer:
-            source_match = re.search(
-                r'from\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+slot\s+(\d+)',
-                text,
-                re.IGNORECASE
-            )
-            if source_match and 'source' not in step:
-                source_well = source_match.group(1).strip()
-                source_slot = source_match.group(3).strip()
-                source_labware = _resolve_labware_by_slot(source_slot)
-                if source_labware:
-                    step['source'] = {'labware': source_labware, 'well': source_well}
+            def _extract_end_well(patterns: List[str]) -> Optional[Dict[str, str]]:
+                for pattern in patterns:
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if not match:
+                        continue
+                    well_id = match.group(1).strip()
+                    labware_text = match.group(2).strip()
+                    slot = match.group(3).strip() if match.lastindex and match.lastindex >= 3 else None
+                    if slot:
+                        labware_name = _resolve_labware_by_slot(slot)
+                    else:
+                        labware_name = _resolve_labware_by_text(labware_text)
+                    if labware_name:
+                        return {'labware': labware_name, 'well': well_id}
+                return None
 
-            dest_match = re.search(
-                r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+slot\s+(\d+)',
-                text,
-                re.IGNORECASE
-            )
-            if not dest_match:
-                dest_match = re.search(
-                    r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+)$',
-                    text,
-                    re.IGNORECASE
-                )
+            source_patterns = [
+                r'from\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?(\d+)',
+                r'from\s+([A-H]\d{1,2})\s+of\s+(.+?)(?:\s+to\b|$)'
+            ]
+            dest_patterns = [
+                r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?(\d+)',
+                r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+?)(?:$)'
+            ]
 
-            if dest_match and 'dest' not in step:
-                dest_well = dest_match.group(1).strip()
-                dest_labware_text = dest_match.group(2).strip()
-                dest_slot = dest_match.group(3) if dest_match.lastindex and dest_match.lastindex >= 3 else None
-                if dest_slot:
-                    dest_labware = _resolve_labware_by_slot(dest_slot)
-                else:
-                    dest_labware = _resolve_labware_by_text(dest_labware_text)
-                if dest_labware:
-                    step['dest'] = {'labware': dest_labware, 'well': dest_well}
+            if 'source' not in step:
+                source_data = _extract_end_well(source_patterns)
+                if source_data:
+                    step['source'] = source_data
+
+            if 'dest' not in step:
+                dest_data = _extract_end_well(dest_patterns)
+                if dest_data:
+                    step['dest'] = dest_data
 
         # Store if we found both
         if not is_distribute_transfer and well and labware:
