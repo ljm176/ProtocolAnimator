@@ -33,7 +33,11 @@ app = FastAPI(title="Opentrons Protocol Simulator API", version="1.0.0")
 # CORS middleware for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",  # Vite dev server
+        "https://*.vercel.app",    # Allow all Vercel preview/production deploys
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
