@@ -8,6 +8,7 @@ const STEP_ICONS = {
   drop_tip: '🗑️',
   mix: '🔄',
   'module.set_temperature': '🌡️',
+  move_labware: '🦾',
   other: '•'
 }
 
@@ -18,6 +19,7 @@ const STEP_COLORS = {
   drop_tip: 'bg-gray-50 border-gray-300 text-gray-700',
   mix: 'bg-purple-50 border-purple-300 text-purple-700',
   'module.set_temperature': 'bg-orange-50 border-orange-300 text-orange-700',
+  move_labware: 'bg-amber-50 border-amber-300 text-amber-700',
   other: 'bg-gray-50 border-gray-300 text-gray-600'
 }
 
@@ -176,6 +178,15 @@ export default function StepsTimeline({ steps, currentStepIndex = -1, onStepClic
                   )}
                   {step.targetC && (
                     <div><span className="font-semibold">Target Temp:</span> {step.targetC}°C</div>
+                  )}
+                  {step.sourceSlot && (
+                    <div><span className="font-semibold">Source Slot:</span> {step.sourceSlot}</div>
+                  )}
+                  {step.destSlot && (
+                    <div><span className="font-semibold">Dest Slot:</span> {step.destSlot}</div>
+                  )}
+                  {step.useGripper && (
+                    <div><span className="font-semibold">Gripper:</span> Yes</div>
                   )}
                 </div>
               )}

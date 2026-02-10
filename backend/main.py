@@ -11,7 +11,13 @@ import json
 import tempfile
 import shutil
 from typing import Optional
-from simulator import ProtocolSimulator, generate_deck_svg, generate_report, generate_well_coordinates
+from simulator import (
+    ProtocolSimulator,
+    generate_deck_svg_for_robot,
+    generate_well_coordinates_for_robot,
+    build_deck_config,
+    generate_report
+)
 
 
 def run_simulation_sync(protocol_path: str, metadata_dict: dict) -> dict:
@@ -87,10 +93,10 @@ async def simulate_protocol(
             raise HTTPException(status_code=500, detail=result['error'])
 
         # Generate deck SVG
-        deck_svg = generate_deck_svg(result['robot_config'])
+        deck_svg = generate_deck_svg_for_robot(result['robot_config'])
 
         # Generate well coordinates for animation
-        well_coordinates = generate_well_coordinates(result['robot_config'])
+        well_coordinates = generate_well_coordinates_for_robot(result['robot_config'])
 
         # Generate report
         output_dir = TEMP_DIR / "output"
@@ -119,12 +125,17 @@ async def simulate_protocol(
         with report_path.open('w') as f:
             f.write(report_md)
 
+        # Build deck config for frontend
+        robot_model = result['robot_config'].get('robotModel', 'OT-2')
+        deck_config = build_deck_config(robot_model)
+
         return JSONResponse({
             'success': True,
             'robot_config': result['robot_config'],
             'steps': result['steps'],
             'deck_layout': result['deck_layout'],
             'deck_svg': deck_svg,
+            'deck_config': deck_config,
             'well_coordinates': well_coordinates,
             'report': report_md,
             'artifact_paths': {

@@ -86,6 +86,8 @@ function App() {
               <DeckVisualization
                 deckSvg={simulationData.deck_svg}
                 deckLayout={simulationData.deck_layout}
+                deckConfig={simulationData.deck_config}
+                robotModel={simulationData.robot_config?.robotModel}
                 steps={simulationData.steps}
                 wellCoordinates={simulationData.well_coordinates}
                 pipettes={simulationData.robot_config?.pipettes || []}

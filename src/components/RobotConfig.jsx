@@ -46,7 +46,7 @@ export default function RobotConfig({ config }) {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm">
         <div className="flex justify-between mb-1">
           <span className="text-gray-600">Robot Model:</span>
-          <span className="font-semibold">{config.robotModel || 'OT-2'}</span>
+          <span className="font-semibold">{config.robotModel || 'Unknown'}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-600">API Level:</span>
