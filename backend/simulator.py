@@ -19,6 +19,7 @@ class ProtocolSimulator:
         self.robot_config = {}
         self.steps = []
         self.deck_layout = {}
+        self.robot_model = 'OT-2'  # Default to OT-2
 
     def simulate(self) -> Dict[str, Any]:
         """
@@ -41,8 +42,12 @@ class ProtocolSimulator:
             if protocol_metadata:
                 self.metadata.update(protocol_metadata)
 
-            # Get API level from metadata
-            api_level = protocol_metadata.get('apiLevel', '2.14')
+            # Extract requirements (for Flex detection)
+            protocol_requirements = self._extract_requirements(protocol_code)
+            self.robot_model = self._detect_robot_model(protocol_requirements)
+
+            # Get API level from requirements first (Flex protocols), then metadata (OT-2), with fallback
+            api_level = protocol_requirements.get('apiLevel') or protocol_metadata.get('apiLevel', '2.14')
 
             # Run simulation to get runlog
             runlog, bundle = simulate(
@@ -52,7 +57,8 @@ class ProtocolSimulator:
             )
 
             # Execute protocol to get context with actual loaded labware/instruments
-            protocol_context = get_protocol_api(api_level)
+            # Pass robot_type to create the correct context (Flex or OT-2)
+            protocol_context = get_protocol_api(api_level, robot_type=self.robot_model)
 
             # Create a safe execution environment
             exec_globals = {
@@ -68,7 +74,7 @@ class ProtocolSimulator:
                 exec_globals['run'](protocol_context)
 
             # Extract data from executed context
-            self._extract_robot_config(protocol_context)
+            self._extract_robot_config(protocol_context, self.robot_model, api_level)
             self._extract_steps(runlog)
             self._extract_deck_layout(protocol_context)
 
@@ -91,11 +97,11 @@ class ProtocolSimulator:
                 'error': f"{str(e)}\n\nDetails:\n{error_detail}"
             }
 
-    def _extract_robot_config(self, protocol: Any) -> None:
+    def _extract_robot_config(self, protocol: Any, robot_model: str = 'OT-2', api_level: str = '2.x') -> None:
         """Extract pipettes, modules, and labware from the protocol context."""
         self.robot_config = {
-            'robotModel': 'OT-2',
-            'apiLevel': '2.x',
+            'robotModel': robot_model,
+            'apiLevel': api_level,
             'pipettes': self._extract_pipettes(protocol),
             'modules': self._extract_modules(protocol),
             'labware': self._extract_labware(protocol),
@@ -179,11 +185,20 @@ class ProtocolSimulator:
                             # Get module slot - use string parsing as fallback
                             import re
                             module_str = str(parent_obj)
-                            slot_match = re.search(r'on (\d+)', module_str)
+                            slot_match = re.search(r'on\s+(?:slot\s+)?([A-D]?\d+)', module_str)
                             module_slot = slot_match.group(1) if slot_match else slot
 
                             slot = module_slot
                             parent = f"{model_name}:{module_slot}"
+                        elif hasattr(parent_obj, 'load_name'):
+                            # It's an adapter - extract slot from adapter's parent
+                            adapter_name = parent_obj.load_name if hasattr(parent_obj, 'load_name') else 'adapter'
+                            # Get adapter's slot
+                            if hasattr(parent_obj, 'parent'):
+                                adapter_parent = parent_obj.parent
+                                if isinstance(adapter_parent, str) or isinstance(adapter_parent, int):
+                                    slot = str(adapter_parent)
+                                    parent = f"{adapter_name}:{slot}"
 
                     labware_list.append({
                         'slot': slot,
@@ -287,7 +302,8 @@ class ProtocolSimulator:
             # Pattern: "from/to/into WELL of LABWARE on [slot] N"
             # Example: "Dispensing 100.0 uL into A2 of Corning 96 Well Plate 360 µL Flat on 1"
             # Note: Some API versions say "on slot N", others just "on N"
-            pattern = r'(?:from|to|into)\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?(\d+)'
+            # Supports both numeric (OT-2) and coordinate (Flex) slots
+            pattern = r'(?:from|to|into)\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?([A-D]?\d+)'
             match = re.search(pattern, text)
             if match:
                 if not well:
@@ -323,11 +339,11 @@ class ProtocolSimulator:
                 return None
 
             source_patterns = [
-                r'from\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?(\d+)',
+                r'from\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?([A-D]?\d+)',
                 r'from\s+([A-H]\d{1,2})\s+of\s+(.+?)(?:\s+to\b|$)'
             ]
             dest_patterns = [
-                r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?(\d+)',
+                r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+?)\s+on\s+(?:slot\s+)?([A-D]?\d+)',
                 r'\bto\s+([A-H]\d{1,2})\s+of\s+(.+?)(?:$)'
             ]
 
@@ -374,6 +390,18 @@ class ProtocolSimulator:
             temp_match = re.search(r'(\d+(?:\.\d+)?)\s*°?C', text)
             if temp_match:
                 step['targetC'] = float(temp_match.group(1))
+        elif 'moving' in text_lower or 'move_labware' in text_lower or 'gripper' in text_lower:
+            step['type'] = 'move_labware'
+            # Parse source and dest slots
+            # Pattern: "moving labware from slot X to slot Y"
+            # Supports both numeric (OT-2) and coordinate (Flex) slots
+            move_pattern = r'from\s+(?:slot\s+)?([A-D]?\d+)\s+to\s+(?:slot\s+)?([A-D]?\d+)'
+            match = re.search(move_pattern, text)
+            if match:
+                step['sourceSlot'] = match.group(1)
+                step['destSlot'] = match.group(2)
+            # Detect gripper usage
+            step['useGripper'] = 'gripper' in text_lower
 
         return step
 
@@ -399,10 +427,40 @@ class ProtocolSimulator:
 
         return metadata
 
+    def _extract_requirements(self, protocol_code: str) -> Dict[str, Any]:
+        """Extract requirements dictionary from protocol code."""
+        import re
+        import ast
+
+        requirements = {}
+
+        # Try to find requirements dictionary in the code
+        # Pattern: requirements = {...}
+        requirements_pattern = r'requirements\s*=\s*(\{[^}]+\})'
+        match = re.search(requirements_pattern, protocol_code, re.DOTALL)
+
+        if match:
+            try:
+                # Safely evaluate the dictionary
+                requirements_str = match.group(1)
+                requirements = ast.literal_eval(requirements_str)
+            except:
+                pass
+
+        return requirements
+
+    def _detect_robot_model(self, requirements: Dict[str, Any]) -> str:
+        """Detect robot model from requirements."""
+        robot_type = requirements.get('robotType', '').lower()
+        if robot_type == 'flex':
+            return 'Flex'
+        return 'OT-2'
+
     def _extract_deck_layout(self, protocol: Any) -> None:
         """Extract deck layout information for visualization."""
+        deck_config = build_deck_config(self.robot_model)
         self.deck_layout = {
-            'slots': list(range(1, 13)),
+            'slots': deck_config['slotLabels'],
             'occupied': []
         }
 
@@ -512,6 +570,51 @@ def _draw_well_pattern(x: int, y: int, width: int, height: int,
     return svg
 
 
+def build_deck_config(robot_model: str) -> Dict:
+    """
+    Build deck configuration for the given robot model.
+    Returns all layout constants needed for SVG generation and coordinate mapping.
+    """
+    if robot_model == 'Flex':
+        return {
+            'robotModel': 'Flex',
+            'slotCount': 16,
+            'gridRows': 4,
+            'gridCols': 4,
+            'slotWidth': 170,
+            'slotHeight': 120,
+            'margin': 50,
+            'svgWidth': 860,
+            'svgHeight': 580,
+            'slotLabels': ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4',
+                           'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4'],
+            'slotNamingScheme': 'coordinate',
+            'trashSlot': None,
+            'trashType': 'waste_chute',
+            'stagingGap': 20,
+            'stagingCols': [4],
+            'mainCols': 3
+        }
+    else:  # OT-2
+        return {
+            'robotModel': 'OT-2',
+            'slotCount': 12,
+            'gridRows': 4,
+            'gridCols': 3,
+            'slotWidth': 200,
+            'slotHeight': 120,
+            'margin': 50,
+            'svgWidth': 800,
+            'svgHeight': 600,
+            'slotLabels': ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+            'slotNamingScheme': 'numeric',
+            'trashSlot': '12',
+            'trashType': 'fixed_trash',
+            'stagingGap': 0,
+            'stagingCols': []
+        }
+
+
 def generate_deck_svg(robot_config: Dict) -> str:
     """Generate SVG representation of the deck layout with well patterns."""
     # Simple SVG grid for 12 slots (OT-2)
@@ -613,6 +716,149 @@ def generate_deck_svg(robot_config: Dict) -> str:
     return svg
 
 
+def generate_flex_deck_svg(robot_config: Dict) -> str:
+    """Generate SVG representation of the Flex deck layout (4×4 grid) with well patterns."""
+    deck_config = build_deck_config('Flex')
+
+    slot_width = deck_config['slotWidth']
+    slot_height = deck_config['slotHeight']
+    margin = deck_config['margin']
+    staging_gap = deck_config['stagingGap']
+    svg_width = deck_config['svgWidth']
+    svg_height = deck_config['svgHeight']
+
+    svg = f'''<svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="{svg_width}" height="{svg_height}" fill="#f5f5f5"/>
+    '''
+
+    # Add row headers (A-D) on the left
+    for row in range(4):
+        row_letter = chr(ord('A') + row)
+        y = margin + row * slot_height + slot_height / 2
+        svg += f'<text x="{margin - 20}" y="{y + 5}" font-size="14" font-weight="bold" fill="#333" text-anchor="middle">{row_letter}</text>'
+
+    # Add column headers (1-4) on top
+    for col in range(4):
+        col_number = col + 1
+        extra_gap = staging_gap if col == 3 else 0
+        x = margin + col * slot_width + extra_gap + slot_width / 2
+        svg += f'<text x="{x}" y="{margin - 15}" font-size="14" font-weight="bold" fill="#333" text-anchor="middle">{col_number}</text>'
+
+    # Add dashed separator line before column 4 (staging area)
+    separator_x = margin + 3 * slot_width + staging_gap / 2
+    svg += f'<line x1="{separator_x}" y1="{margin}" x2="{separator_x}" y2="{margin + 4 * slot_height}" stroke="#999" stroke-width="2" stroke-dasharray="5,5"/>'
+
+    # Add "Staging Area" label above column 4
+    staging_label_x = margin + 3 * slot_width + staging_gap + slot_width / 2
+    svg += f'<text x="{staging_label_x}" y="{margin - 30}" font-size="12" font-weight="bold" fill="#666" text-anchor="middle">Staging Area</text>'
+
+    # Build lookup for what's in each slot
+    modules = {str(m['slot']): m for m in robot_config.get('modules', [])}
+    labware_by_slot = {}
+    for lw in robot_config.get('labware', []):
+        slot = lw['slot']
+        if slot not in labware_by_slot:
+            labware_by_slot[slot] = []
+        labware_by_slot[slot].append(lw)
+
+    # Draw all 16 slots (4×4 grid)
+    for slot_label in deck_config['slotLabels']:
+        # Parse coordinate label (e.g., 'B3')
+        if not slot_label or len(slot_label) < 2:
+            continue  # Skip invalid slot labels
+
+        row_letter = slot_label[0]
+        try:
+            col_number = int(slot_label[1:])
+        except ValueError:
+            continue  # Skip if slot number is invalid
+
+        row = ord(row_letter) - ord('A')  # A=0, B=1, C=2, D=3
+        col = col_number - 1  # 1=0, 2=1, 3=2, 4=3
+
+        # Apply staging gap for column 4
+        extra_gap = staging_gap if col == 3 else 0
+        x = margin + col * slot_width + extra_gap
+        y = margin + row * slot_height
+
+        # Determine slot contents and color
+        has_module = slot_label in modules
+        slot_labware = labware_by_slot.get(slot_label, [])
+
+        # Default empty slot
+        fill_color = "white"
+        stroke_color = "#333"
+        label_text = None
+        well_format = None
+        is_tiprack = False
+        is_reservoir = False
+        load_name = ''
+
+        if has_module:
+            # Module slot - blue
+            fill_color = "#dbeafe"  # blue-100
+            stroke_color = "#3b82f6"  # blue-500
+            label_text = modules[slot_label].get('model', 'Module')
+            # Check for nested labware on module
+            if slot_labware:
+                nested_lw = slot_labware[0]
+                load_name = nested_lw.get('loadName', '').lower()
+                well_format = _detect_well_format(load_name)
+                is_tiprack = 'tiprack' in load_name or 'tip_rack' in load_name
+                is_reservoir = 'reservoir' in load_name
+        elif slot_labware:
+            lw = slot_labware[0]  # Primary labware in slot
+            load_name = lw.get('loadName', '').lower()
+            label_text = lw.get('label', lw.get('loadName', 'Unknown'))
+            well_format = _detect_well_format(load_name)
+            is_reservoir = 'reservoir' in load_name
+
+            if 'tiprack' in load_name or 'tip_rack' in load_name:
+                # Tiprack - green
+                fill_color = "#dcfce7"  # green-100
+                stroke_color = "#22c55e"  # green-500
+                is_tiprack = True
+            elif 'trash' in load_name:
+                # Trash - red/orange
+                fill_color = "#fee2e2"  # red-100
+                stroke_color = "#ef4444"  # red-500
+            else:
+                # Regular labware - gray
+                fill_color = "#f3f4f6"  # gray-100
+                stroke_color = "#6b7280"  # gray-500
+
+        # Draw slot background
+        svg += f'<rect x="{x}" y="{y}" width="{slot_width-10}" height="{slot_height-10}" '
+        svg += f'fill="{fill_color}" stroke="{stroke_color}" stroke-width="2" rx="5"/>'
+
+        # Draw well pattern if applicable
+        if well_format and 'trash' not in load_name:
+            rows, cols = well_format
+            svg += _draw_well_pattern(
+                x, y, slot_width - 10, slot_height - 10,
+                rows, cols, stroke_color, is_tiprack, is_reservoir
+            )
+
+        # Slot label (positioned at top-left)
+        svg += f'<text x="{x+5}" y="{y+12}" font-size="10" font-weight="bold" fill="{stroke_color}">{slot_label}</text>'
+
+        # Labware/module label at bottom
+        if label_text:
+            # Truncate long labels
+            display_label = label_text[:20] + '..' if len(label_text) > 20 else label_text
+            svg += f'<text x="{x+5}" y="{y+slot_height-15}" font-size="9" fill="#333">{display_label}</text>'
+
+    # Add waste chute indicator in bottom-right margin
+    waste_x = margin + 4 * slot_width + staging_gap + 10
+    waste_y = margin + 4 * slot_height - 40
+    svg += f'<rect x="{waste_x}" y="{waste_y}" width="40" height="30" fill="#fee2e2" stroke="#ef4444" stroke-width="2" rx="3"/>'
+    svg += f'<text x="{waste_x + 20}" y="{waste_y + 18}" font-size="8" fill="#ef4444" text-anchor="middle">Waste</text>'
+    svg += f'<text x="{waste_x + 20}" y="{waste_y + 26}" font-size="8" fill="#ef4444" text-anchor="middle">Chute</text>'
+
+    svg += '</svg>'
+    return svg
+
+
 def generate_well_coordinates(robot_config: Dict) -> Dict:
     """
     Generate SVG coordinate mapping for all wells in all labware.
@@ -692,6 +938,117 @@ def generate_well_coordinates(robot_config: Dict) -> Dict:
         coordinates[slot_str][label] = well_coords
 
     return coordinates
+
+
+def generate_flex_well_coordinates(robot_config: Dict) -> Dict:
+    """
+    Generate SVG coordinate mapping for all wells in all labware for Flex deck.
+    Returns: {slot: {labware_label: {well_id: {x, y}}}}
+    """
+    coordinates = {}
+    deck_config = build_deck_config('Flex')
+
+    # Deck layout constants
+    slot_width = deck_config['slotWidth']
+    slot_height = deck_config['slotHeight']
+    margin = deck_config['margin']
+    staging_gap = deck_config['stagingGap']
+
+    # Well pattern constants (match _draw_well_pattern)
+    padding_top = 18
+    padding_bottom = 18
+    padding_x = 20
+
+    # Build module lookup
+    modules = {str(m['slot']): m for m in robot_config.get('modules', [])}
+
+    for labware in robot_config.get('labware', []):
+        slot_label = labware['slot']
+        label = labware.get('label', 'Unknown')
+        load_name = labware.get('loadName', '').lower()
+
+        # Skip trash
+        if 'trash' in load_name:
+            continue
+
+        # Parse coordinate label (e.g., 'B3')
+        if not slot_label or len(slot_label) < 2:
+            continue  # Skip invalid slot labels
+
+        row_letter = slot_label[0]
+        try:
+            col_number = int(slot_label[1:])
+        except ValueError:
+            continue  # Skip if slot number is invalid
+
+        row = ord(row_letter) - ord('A')  # A=0, B=1, C=2, D=3
+        col = col_number - 1  # 1=0, 2=1, 3=2, 4=3
+
+        # Apply staging gap for column 4
+        extra_gap = staging_gap if col == 3 else 0
+        slot_x = margin + col * slot_width + extra_gap
+        slot_y = margin + row * slot_height
+
+        # Detect well format
+        well_format = _detect_well_format(load_name)
+        if not well_format:
+            # Can't map wells without format
+            continue
+
+        rows, cols = well_format
+
+        # Calculate available space (same as _draw_well_pattern)
+        slot_inner_width = slot_width - 10  # Account for border
+        slot_inner_height = slot_height - 10
+        available_width = slot_inner_width - (padding_x * 2)
+        available_height = slot_inner_height - padding_top - padding_bottom
+
+        cell_width = available_width / cols
+        cell_height = available_height / rows
+
+        # Generate coordinates for each well
+        well_coords = {}
+
+        for row_idx in range(rows):
+            for col_idx in range(cols):
+                # Generate well ID (A1, A2, B1, etc.)
+                row_letter = chr(ord('A') + row_idx)
+                col_number = col_idx + 1
+                well_id = f"{row_letter}{col_number}"
+
+                # Calculate well center position
+                well_x = slot_x + padding_x + (col_idx + 0.5) * cell_width
+                well_y = slot_y + padding_top + (row_idx + 0.5) * cell_height
+
+                well_coords[well_id] = {
+                    'x': round(well_x, 2),
+                    'y': round(well_y, 2)
+                }
+
+        # Store coordinates by slot and labware label
+        if slot_label not in coordinates:
+            coordinates[slot_label] = {}
+        coordinates[slot_label][label] = well_coords
+
+    return coordinates
+
+
+def generate_deck_svg_for_robot(robot_config: Dict) -> str:
+    """Dispatch to OT-2 or Flex SVG generator based on robot model."""
+    robot_model = robot_config.get('robotModel', 'OT-2')
+    if robot_model == 'Flex':
+        return generate_flex_deck_svg(robot_config)
+    else:
+        return generate_deck_svg(robot_config)
+
+
+def generate_well_coordinates_for_robot(robot_config: Dict) -> Dict:
+    """Dispatch to OT-2 or Flex coordinate generator based on robot model."""
+    robot_model = robot_config.get('robotModel', 'OT-2')
+    if robot_model == 'Flex':
+        return generate_flex_well_coordinates(robot_config)
+    else:
+        return generate_well_coordinates(robot_config)
 
 
 def generate_report(robot_config: Dict, steps: List[Dict], output_dir: Path) -> str:

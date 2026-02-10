@@ -4,6 +4,8 @@ import { ZoomIn, ZoomOut, Maximize2, Play, Pause, SkipForward, SkipBack, RotateC
 export default function DeckVisualization({
   deckSvg,
   deckLayout,
+  deckConfig,
+  robotModel,
   steps = [],
   wellCoordinates = {},
   pipettes = [],
@@ -13,6 +15,47 @@ export default function DeckVisualization({
   const [zoom, setZoom] = useState(1)
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
+
+  // OT-2 fallback for backward compatibility
+  const config = deckConfig || {
+    slotCount: 12,
+    gridRows: 4,
+    gridCols: 3,
+    slotWidth: 200,
+    slotHeight: 120,
+    margin: 50,
+    svgWidth: 800,
+    svgHeight: 600,
+    slotNamingScheme: 'numeric',
+    trashSlot: '12',
+    stagingGap: 0
+  }
+
+  // Calculate slot position based on robot type
+  const getSlotPosition = (slotLabel) => {
+    if (!slotLabel) return { x: 0, y: 0 }
+
+    if (config.slotNamingScheme === 'coordinate') {
+      // Flex: parse "A1" format
+      const row = slotLabel.charCodeAt(0) - 'A'.charCodeAt(0)
+      const col = parseInt(slotLabel.slice(1)) - 1
+      const extraGap = col === 3 ? config.stagingGap : 0
+      return {
+        x: config.margin + col * config.slotWidth + extraGap,
+        y: config.margin + row * config.slotHeight
+      }
+    } else {
+      // OT-2: existing numeric logic
+      const slotNum = parseInt(slotLabel)
+      const slot_index = slotNum - 1
+      const row = 3 - Math.floor(slot_index / 3)
+      const col = slot_index % 3
+      return {
+        x: config.margin + col * config.slotWidth,
+        y: config.margin + row * config.slotHeight
+      }
+    }
+  }
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.2, 2))
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.2, 0.5))
@@ -102,23 +145,22 @@ export default function DeckVisualization({
     const pipetteName = parts.length > 1 ? parts[1] : step.pipette
     const match = pipettes.find(p => p.name === pipetteName)
     if (match?.channels) return match.channels
+    // Check for 96-channel in name
+    if (pipetteName.toLowerCase().includes('96')) return 96
     if (pipetteName.toLowerCase().includes('multi')) return 8
     return 1
   }
 
-  const expandWellTargets = (labwareLabel, wellId, isMulti) => {
+  const expandWellTargets = (labwareLabel, wellId, channels) => {
     const info = getLabwareInfo(labwareLabel)
     if (!info) return [wellId]
 
-    // For single-channel pipettes, always just return the target well
-    if (!isMulti) return [wellId]
+    // Single-channel: just the target well
+    if (channels === 1) return [wellId]
 
-    // For reservoirs with multichannel, the special rendering handles it
-    // Just return the target well here (multichannel reservoir spread is in renderAnimationIndicators)
+    // Reservoir with multichannel: special handling (keep existing)
     const isReservoir = labwareLabel.toLowerCase().includes('reservoir')
-    if (isReservoir) {
-      return [wellId]
-    }
+    if (isReservoir) return [wellId]
 
     const match = wellId.match(/^([A-Z]+)(\d+)$/)
     if (!match) return [wellId]
@@ -126,6 +168,21 @@ export default function DeckVisualization({
     const targetRow = match[1]
     const targetCol = match[2]
 
+    // 96-channel: expand to ALL wells (entire plate)
+    if (channels === 96) {
+      const allWells = []
+      for (const row of info.rowLetters) {
+        for (let col = 1; col <= info.cols; col++) {
+          const wellId = `${row}${col}`
+          if (info.wellMap[wellId]) {
+            allWells.push(wellId)
+          }
+        }
+      }
+      return allWells
+    }
+
+    // 8-channel: existing logic for 8 or 16 rows
     if (info.rows === 16 && info.cols === 24) {
       const rowIndex = info.rowLetters.indexOf(targetRow)
       const parity = rowIndex >= 0 ? rowIndex % 2 : 0
@@ -169,16 +226,22 @@ export default function DeckVisualization({
     return labwareLabel?.toLowerCase().includes('trash')
   }
 
-  // Get fixed coordinates for trash (slot 12)
-  // Slot 12: row 0 (top), col 2 (right) in the deck grid
+  // Get fixed coordinates for trash
   const getTrashCoordinates = () => {
-    const slot_width = 200
-    const slot_height = 120
-    const margin = 50
-    // Slot 12 position
-    const x = margin + 2 * slot_width + slot_width / 2 - 5  // Center of slot 12
-    const y = margin + 0 * slot_height + slot_height / 2    // Center vertically
-    return { x, y }
+    if (config.trashSlot) {
+      // OT-2: trash in specific slot
+      const pos = getSlotPosition(config.trashSlot)
+      return {
+        x: pos.x + config.slotWidth / 2 - 5,
+        y: pos.y + config.slotHeight / 2
+      }
+    } else {
+      // Flex: waste chute in margin (fixed position)
+      return {
+        x: config.margin + config.slotWidth * config.gridCols + 20,
+        y: config.margin + config.slotHeight * config.gridRows - 30
+      }
+    }
   }
 
   // Render triangle indicator
@@ -219,7 +282,6 @@ export default function DeckVisualization({
     const step = steps[currentStepIndex]
     const indicators = []
     const channels = getPipetteChannels(step)
-    const isMulti = channels >= 8
 
     // Determine what to show based on step type
     // - aspirate/pick_up_tip: show source only (taking from a location)
@@ -241,6 +303,7 @@ export default function DeckVisualization({
     // Handle source well (aspirate, pick_up_tip)
     if (showSource && step.source?.labware && step.source?.well) {
       // Check for multichannel + single-well reservoir special case
+      const isMulti = channels >= 8
       if (isMulti && isReservoirLabware(step.source.labware)) {
         const baseCoords = getWellCoordinates(step.source.labware, step.source.well)
         if (baseCoords) {
@@ -250,7 +313,7 @@ export default function DeckVisualization({
           })
         }
       } else {
-        const wells = expandWellTargets(step.source.labware, step.source.well, isMulti)
+        const wells = expandWellTargets(step.source.labware, step.source.well, channels)
         for (const wellId of wells) {
           const coords = getWellCoordinates(step.source.labware, wellId)
           if (coords) {
@@ -268,20 +331,23 @@ export default function DeckVisualization({
         indicators.push(renderTriangle('drop_tip', trashCoords.x - 6, trashCoords.y - 8, `dest-${step.idx}-trash`))
       }
       // Check for multichannel + reservoir special case
-      else if (isMulti && isReservoirLabware(step.dest.labware)) {
-        const baseCoords = getWellCoordinates(step.dest.labware, step.dest.well)
-        if (baseCoords) {
-          const positions = getMultichannelReservoirPositions(baseCoords, channels)
-          positions.forEach((pos, i) => {
-            indicators.push(renderTriangle(step.type, pos.x - 6, pos.y - 8, `dest-${step.idx}-tip${i}`))
-          })
-        }
-      } else {
-        const wells = expandWellTargets(step.dest.labware, step.dest.well, isMulti)
-        for (const wellId of wells) {
-          const coords = getWellCoordinates(step.dest.labware, wellId)
-          if (coords) {
-            indicators.push(renderTriangle(step.type, coords.x - 6, coords.y - 8, `dest-${step.idx}-${wellId}`))
+      else {
+        const isMulti = channels >= 8
+        if (isMulti && isReservoirLabware(step.dest.labware)) {
+          const baseCoords = getWellCoordinates(step.dest.labware, step.dest.well)
+          if (baseCoords) {
+            const positions = getMultichannelReservoirPositions(baseCoords, channels)
+            positions.forEach((pos, i) => {
+              indicators.push(renderTriangle(step.type, pos.x - 6, pos.y - 8, `dest-${step.idx}-tip${i}`))
+            })
+          }
+        } else {
+          const wells = expandWellTargets(step.dest.labware, step.dest.well, channels)
+          for (const wellId of wells) {
+            const coords = getWellCoordinates(step.dest.labware, wellId)
+            if (coords) {
+              indicators.push(renderTriangle(step.type, coords.x - 6, coords.y - 8, `dest-${step.idx}-${wellId}`))
+            }
           }
         }
       }
@@ -298,36 +364,90 @@ export default function DeckVisualization({
           const slotLabware = Object.keys(wellCoordinates[slot])
           // If module command references a slot or labware
           if (moduleName.includes(slot) || slotLabware.some(lw => moduleName.includes(lw))) {
-            indicators.push(renderModulePulse(parseInt(slot), `module-${step.idx}`))
+            indicators.push(renderModulePulse(slot, `module-${step.idx}`))
             break
           }
         }
       }
     }
 
+    // Handle move_labware (gripper moves)
+    if (step.type === 'move_labware' && step.sourceSlot && step.destSlot) {
+      const sourcePos = getSlotPosition(step.sourceSlot)
+      const destPos = getSlotPosition(step.destSlot)
+
+      // Calculate arrow path
+      const startX = sourcePos.x + config.slotWidth / 2
+      const startY = sourcePos.y + config.slotHeight / 2
+      const endX = destPos.x + config.slotWidth / 2
+      const endY = destPos.y + config.slotHeight / 2
+
+      // Dashed amber arrow
+      indicators.push(
+        <g key={`move-${step.idx}`}>
+          <defs>
+            <marker
+              id="arrowhead"
+              markerWidth="10"
+              markerHeight="10"
+              refX="9"
+              refY="3"
+              orient="auto"
+            >
+              <polygon points="0 0, 10 3, 0 6" fill="#f59e0b" />
+            </marker>
+          </defs>
+          <line
+            x1={startX}
+            y1={startY}
+            x2={endX}
+            y2={endY}
+            stroke="#f59e0b"
+            strokeWidth="3"
+            strokeDasharray="8,4"
+            markerEnd="url(#arrowhead)"
+            opacity="0.8"
+          />
+          {/* Pulse borders on source and dest slots */}
+          <rect
+            x={sourcePos.x}
+            y={sourcePos.y}
+            width={config.slotWidth - 10}
+            height={config.slotHeight - 10}
+            fill="none"
+            stroke="#f59e0b"
+            strokeWidth="3"
+            opacity="0.6"
+            className="animate-pulse"
+          />
+          <rect
+            x={destPos.x}
+            y={destPos.y}
+            width={config.slotWidth - 10}
+            height={config.slotHeight - 10}
+            fill="none"
+            stroke="#f59e0b"
+            strokeWidth="3"
+            opacity="0.6"
+            className="animate-pulse"
+          />
+        </g>
+      )
+    }
+
     return indicators
   }
 
   // Render module pulse animation
-  const renderModulePulse = (slotNumber, key) => {
-    // Calculate slot position (same logic as generate_deck_svg)
-    const slot_width = 200
-    const slot_height = 120
-    const margin = 50
-
-    const slot_index = slotNumber - 1
-    const row = 3 - Math.floor(slot_index / 3) // Flip vertically
-    const col = slot_index % 3
-    const slot_x = margin + col * slot_width
-    const slot_y = margin + row * slot_height
-
+  const renderModulePulse = (slotLabel, key) => {
+    const pos = getSlotPosition(slotLabel)
     return (
       <rect
         key={key}
-        x={slot_x}
-        y={slot_y}
-        width={190}
-        height={110}
+        x={pos.x}
+        y={pos.y}
+        width={config.slotWidth - 10}
+        height={config.slotHeight - 10}
         fill="none"
         stroke="#3b82f6"
         strokeWidth="3"
@@ -423,8 +543,8 @@ export default function DeckVisualization({
 
           {/* Animation overlay layer */}
           <svg
-            width="800"
-            height="600"
+            width={config.svgWidth}
+            height={config.svgHeight}
             xmlns="http://www.w3.org/2000/svg"
             style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
           >
@@ -440,7 +560,7 @@ export default function DeckVisualization({
         <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
           <div className="bg-blue-50 p-3 rounded">
             <span className="text-gray-600">Total Slots:</span>
-            <span className="ml-2 font-semibold">{deckLayout.slots?.length || 12}</span>
+            <span className="ml-2 font-semibold">{deckLayout.slots?.length || config.slotCount}</span>
           </div>
           <div className="bg-green-50 p-3 rounded">
             <span className="text-gray-600">Occupied:</span>
@@ -467,6 +587,18 @@ export default function DeckVisualization({
           <div className="w-4 h-4 bg-red-100 border-2 border-red-500 rounded"></div>
           <span>Trash</span>
         </div>
+        {robotModel === 'Flex' && (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-white border-2 border-dashed border-gray-400 rounded"></div>
+              <span>Staging Area</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-amber-500 rounded" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, #f59e0b 2px, #f59e0b 4px)'}}></div>
+              <span>Gripper Move</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
