@@ -3,7 +3,6 @@ import ProtocolInput from './components/ProtocolInput'
 import DeckVisualization from './components/DeckVisualization'
 import StepsTimeline from './components/StepsTimeline'
 import RobotConfig from './components/RobotConfig'
-import ValidationPanel from './components/ValidationPanel'
 import ExportDashboard from './components/ExportDashboard'
 
 function App() {
@@ -25,12 +24,10 @@ function App() {
 
       console.log('Response status:', response.status)
 
-      // Parse response first to get error details
       const data = await response.json()
       console.log('Response data:', data)
 
       if (!response.ok) {
-        // Extract detailed error message from backend
         const errorMessage = data.detail || data.message || 'Simulation failed'
         console.error('Simulation error:', errorMessage)
         throw new Error(errorMessage)
@@ -47,82 +44,105 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-0">
       {/* Header */}
-      <header className="bg-blue-600 text-white p-4 shadow-lg">
-        <div className="container mx-auto">
-          <h1 className="text-2xl font-bold">Opentrons Protocol Simulator</h1>
-          <p className="text-blue-100 text-sm">Simulate and visualize your protocols without hardware</p>
+      <header className="border-b border-edge">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <p className="font-mono text-xs text-text-ghost uppercase tracking-widest mb-1">Simulator</p>
+          <h1 className="text-xl font-semibold text-gradient tracking-tight">
+            Opentrons Protocol Simulator
+          </h1>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto p-4">
-        {/* Protocol Input */}
-        <div className="mb-6">
-          <ProtocolInput onSimulate={handleSimulate} loading={loading} />
-        </div>
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        {!simulationData ? (
+          /* Landing — hero drop zone */
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="w-full max-w-xl">
+              <ProtocolInput onSimulate={handleSimulate} loading={loading} hero />
+            </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            <div className="flex items-start gap-2">
-              <strong className="font-semibold">Error:</strong>
-              <div className="flex-1">
-                <p className="whitespace-pre-wrap">{error}</p>
-                <p className="text-sm text-red-600 mt-2">
-                  💡 Check the browser console (F12) for more details
-                </p>
+            {/* Error Display */}
+            {error && (
+              <div className="mt-8 w-full max-w-xl card px-5 py-4 border-red-500/20">
+                <div className="flex items-start gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-2 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-red-400">Error</p>
+                    <p className="text-sm whitespace-pre-wrap mt-1 text-text-secondary">{error}</p>
+                    <p className="text-xs text-text-ghost mt-2">
+                      Check the browser console (F12) for more details
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <p className="mt-8 text-xs text-text-ghost font-mono">
+              .py files only &middot; Opentrons API v2
+            </p>
+          </div>
+        ) : (
+          /* Results view */
+          <>
+            <div className="mb-10">
+              <ProtocolInput onSimulate={handleSimulate} loading={loading} />
+            </div>
+
+            {error && (
+              <div className="mb-10 card px-5 py-4 border-red-500/20">
+                <div className="flex items-start gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-2 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-red-400">Error</p>
+                    <p className="text-sm whitespace-pre-wrap mt-1 text-text-secondary">{error}</p>
+                    <p className="text-xs text-text-ghost mt-2">
+                      Check the browser console (F12) for more details
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <DeckVisualization
+                  deckSvg={simulationData.deck_svg}
+                  deckLayout={simulationData.deck_layout}
+                  deckConfig={simulationData.deck_config}
+                  robotModel={simulationData.robot_config?.robotModel}
+                  steps={simulationData.steps}
+                  wellCoordinates={simulationData.well_coordinates}
+                  pipettes={simulationData.robot_config?.pipettes || []}
+                  currentStepIndex={currentStepIndex}
+                  onStepChange={setCurrentStepIndex}
+                />
+                <StepsTimeline
+                  steps={simulationData.steps}
+                  currentStepIndex={currentStepIndex}
+                  onStepClick={setCurrentStepIndex}
+                />
+              </div>
+
+              <div className="space-y-6">
+                <RobotConfig config={simulationData.robot_config} />
+                <ExportDashboard
+                  artifactPaths={simulationData.artifact_paths}
+                  report={simulationData.report}
+                />
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Results Grid */}
-        {simulationData && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Deck and Config */}
-            <div className="lg:col-span-2 space-y-6">
-              <DeckVisualization
-                deckSvg={simulationData.deck_svg}
-                deckLayout={simulationData.deck_layout}
-                deckConfig={simulationData.deck_config}
-                robotModel={simulationData.robot_config?.robotModel}
-                steps={simulationData.steps}
-                wellCoordinates={simulationData.well_coordinates}
-                pipettes={simulationData.robot_config?.pipettes || []}
-                currentStepIndex={currentStepIndex}
-                onStepChange={setCurrentStepIndex}
-              />
-              <StepsTimeline
-                steps={simulationData.steps}
-                currentStepIndex={currentStepIndex}
-                onStepClick={setCurrentStepIndex}
-              />
-            </div>
-
-            {/* Right Column - Config and Export */}
-            <div className="space-y-6">
-              <RobotConfig config={simulationData.robot_config} />
-              <ExportDashboard
-                artifactPaths={simulationData.artifact_paths}
-                report={simulationData.report}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Validation Panel */}
-        {!simulationData && !loading && (
-          <ValidationPanel />
+          </>
         )}
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-800 text-white p-4 mt-12">
-        <div className="container mx-auto text-center text-sm">
-          <p>Opentrons Protocol Simulator v1.0.0</p>
-          <p className="text-gray-400 mt-1">Static simulator using official Opentrons API</p>
+      <footer className="border-t border-edge mt-20">
+        <div className="max-w-7xl mx-auto px-6 py-8 flex items-center justify-between">
+          <p className="text-xs text-text-ghost font-mono">v1.0.0</p>
+          <p className="text-xs text-text-ghost">Static simulator &middot; Opentrons API</p>
         </div>
       </footer>
     </div>

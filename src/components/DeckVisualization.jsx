@@ -458,29 +458,17 @@ export default function DeckVisualization({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">Deck Layout</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={handleZoomOut}
-            className="p-2 hover:bg-gray-100 rounded transition-colors"
-            title="Zoom Out"
-          >
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="font-mono text-sm font-medium text-text-secondary uppercase tracking-wider">Deck Layout</h2>
+        <div className="flex gap-0.5">
+          <button onClick={handleZoomOut} className="p-1.5 hover:bg-surface-3 rounded text-text-ghost hover:text-text-secondary transition-colors" title="Zoom Out">
             <ZoomOut className="w-4 h-4" />
           </button>
-          <button
-            onClick={handleReset}
-            className="p-2 hover:bg-gray-100 rounded transition-colors"
-            title="Reset Zoom"
-          >
+          <button onClick={handleReset} className="p-1.5 hover:bg-surface-3 rounded text-text-ghost hover:text-text-secondary transition-colors" title="Reset Zoom">
             <Maximize2 className="w-4 h-4" />
           </button>
-          <button
-            onClick={handleZoomIn}
-            className="p-2 hover:bg-gray-100 rounded transition-colors"
-            title="Zoom In"
-          >
+          <button onClick={handleZoomIn} className="p-1.5 hover:bg-surface-3 rounded text-text-ghost hover:text-text-secondary transition-colors" title="Zoom In">
             <ZoomIn className="w-4 h-4" />
           </button>
         </div>
@@ -488,44 +476,31 @@ export default function DeckVisualization({
 
       {/* Playback Controls */}
       {steps.length > 0 && (
-        <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+        <div className="flex items-center gap-2 mb-5 p-3 bg-surface-2 rounded-lg border border-edge">
           <button
             onClick={handlePlayPause}
-            className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            className="p-2 rounded-md hover:bg-zinc-300 transition-colors"
+            style={{ background: '#fafafa', color: '#09090b' }}
             title={isPlaying ? "Pause" : "Play"}
           >
-            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+            {isPlaying ? <Pause size={14} /> : <Play size={14} />}
           </button>
 
-          <button
-            onClick={handleStepBackward}
-            className="p-2 hover:bg-gray-200 rounded transition-colors"
-            title="Step Backward"
-            disabled={currentStepIndex <= 0}
-          >
-            <SkipBack size={20} />
-          </button>
+          <div className="flex gap-0.5">
+            <button onClick={handleStepBackward} className="p-1.5 hover:bg-surface-3 rounded text-text-ghost transition-colors" title="Step Backward" disabled={currentStepIndex <= 0}>
+              <SkipBack size={14} />
+            </button>
+            <button onClick={handleStepForward} className="p-1.5 hover:bg-surface-3 rounded text-text-ghost transition-colors" title="Step Forward" disabled={currentStepIndex >= steps.length - 1}>
+              <SkipForward size={14} />
+            </button>
+            <button onClick={handleResetAnimation} className="p-1.5 hover:bg-surface-3 rounded text-text-ghost transition-colors" title="Reset">
+              <RotateCcw size={14} />
+            </button>
+          </div>
 
-          <button
-            onClick={handleStepForward}
-            className="p-2 hover:bg-gray-200 rounded transition-colors"
-            title="Step Forward"
-            disabled={currentStepIndex >= steps.length - 1}
-          >
-            <SkipForward size={20} />
-          </button>
-
-          <button
-            onClick={handleResetAnimation}
-            className="p-2 hover:bg-gray-200 rounded transition-colors"
-            title="Reset"
-          >
-            <RotateCcw size={20} />
-          </button>
-
-          <div className="text-sm text-gray-600 ml-auto">
+          <div className="text-xs text-text-ghost ml-auto font-mono">
             {currentStepIndex >= 0
-              ? `Step ${currentStepIndex + 1} / ${steps.length}`
+              ? `${currentStepIndex + 1} / ${steps.length}`
               : `${steps.length} steps`
             }
           </div>
@@ -533,15 +508,12 @@ export default function DeckVisualization({
       )}
 
       {/* SVG Display */}
-      <div className="border border-gray-200 rounded-lg overflow-auto bg-gray-50 p-4">
+      <div className="border border-edge rounded-lg overflow-auto bg-surface-2 p-4">
         <div
           className="transition-transform origin-top-left relative"
           style={{ transform: `scale(${zoom})` }}
         >
-          {/* Static deck SVG */}
           <div dangerouslySetInnerHTML={{ __html: deckSvg }} />
-
-          {/* Animation overlay layer */}
           <svg
             width={config.svgWidth}
             height={config.svgHeight}
@@ -557,45 +529,45 @@ export default function DeckVisualization({
 
       {/* Deck Info */}
       {deckLayout && (
-        <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-          <div className="bg-blue-50 p-3 rounded">
-            <span className="text-gray-600">Total Slots:</span>
-            <span className="ml-2 font-semibold">{deckLayout.slots?.length || config.slotCount}</span>
+        <div className="mt-5 grid grid-cols-2 gap-3 text-xs font-mono">
+          <div className="bg-surface-2 border border-edge p-3 rounded-lg">
+            <span className="text-text-ghost">Slots</span>
+            <span className="ml-2 text-text-primary">{deckLayout.slots?.length || config.slotCount}</span>
           </div>
-          <div className="bg-green-50 p-3 rounded">
-            <span className="text-gray-600">Occupied:</span>
-            <span className="ml-2 font-semibold">{deckLayout.occupied?.length || 0}</span>
+          <div className="bg-surface-2 border border-edge p-3 rounded-lg">
+            <span className="text-text-ghost">Occupied</span>
+            <span className="ml-2 text-text-primary">{deckLayout.occupied?.length || 0}</span>
           </div>
         </div>
       )}
 
       {/* Color Legend */}
-      <div className="mt-4 flex flex-wrap gap-4 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-100 border-2 border-blue-500 rounded"></div>
+      <div className="mt-5 flex flex-wrap gap-4 text-xs text-text-ghost">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 bg-blue-500/20 border border-blue-400/50 rounded-sm"></div>
           <span>Modules</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-100 border-2 border-green-500 rounded"></div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 bg-emerald-500/20 border border-emerald-400/50 rounded-sm"></div>
           <span>Tipracks</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-gray-100 border-2 border-gray-500 rounded"></div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 bg-zinc-500/20 border border-zinc-400/50 rounded-sm"></div>
           <span>Labware</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-100 border-2 border-red-500 rounded"></div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 bg-red-500/20 border border-red-400/50 rounded-sm"></div>
           <span>Trash</span>
         </div>
         {robotModel === 'Flex' && (
           <>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-white border-2 border-dashed border-gray-400 rounded"></div>
-              <span>Staging Area</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 border border-dashed border-zinc-500 rounded-sm"></div>
+              <span>Staging</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-amber-500 rounded" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, #f59e0b 2px, #f59e0b 4px)'}}></div>
-              <span>Gripper Move</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 border border-amber-500/50 rounded-sm" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(245,158,11,0.3) 2px, rgba(245,158,11,0.3) 4px)'}}></div>
+              <span>Gripper</span>
             </div>
           </>
         )}
