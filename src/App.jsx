@@ -5,6 +5,8 @@ import StepsTimeline from './components/StepsTimeline'
 import RobotConfig from './components/RobotConfig'
 import ExportDashboard from './components/ExportDashboard'
 
+const API_URL = import.meta.env.VITE_API_URL || ''
+
 function App() {
   const [simulationData, setSimulationData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17,7 +19,7 @@ function App() {
 
     try {
       console.log('Sending simulation request...')
-      const response = await fetch('/api/simulate', {
+      const response = await fetch(`${API_URL}/api/simulate`, {
         method: 'POST',
         body: formData,
       })

@@ -6,7 +6,8 @@ export default function ExportDashboard({ artifactPaths, report }) {
 
   const downloadArtifact = async (type) => {
     try {
-      const response = await fetch(`/api/download/${type}`)
+      const API_URL = import.meta.env.VITE_API_URL || ''
+      const response = await fetch(`${API_URL}/api/download/${type}`)
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
