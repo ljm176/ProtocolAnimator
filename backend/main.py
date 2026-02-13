@@ -37,8 +37,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",  # Vite dev server
-        "https://*.vercel.app",    # Allow all Vercel preview/production deploys
+        "https://opentrons-simulator.vercel.app",
     ],
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Allow all Vercel preview deploys
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
