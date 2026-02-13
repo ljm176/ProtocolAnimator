@@ -10,7 +10,7 @@ from pathlib import Path
 import json
 import tempfile
 import shutil
-from typing import Optional
+from typing import Optional, List
 from simulator import (
     ProtocolSimulator,
     generate_deck_svg_for_robot,
@@ -18,14 +18,15 @@ from simulator import (
     build_deck_config,
     generate_report
 )
+from parameter_extractor import extract_parameters
 
 
-def run_simulation_sync(protocol_path: str, metadata_dict: dict) -> dict:
+def run_simulation_sync(protocol_path: str, metadata_dict: dict, param_values: dict = None, csv_data: dict = None) -> dict:
     """
     Run protocol simulation synchronously.
     This is called in a thread pool to avoid asyncio.run() conflicts.
     """
-    simulator = ProtocolSimulator(protocol_path, metadata_dict)
+    simulator = ProtocolSimulator(protocol_path, metadata_dict, param_values=param_values, csv_data=csv_data)
     return simulator.simulate()
 
 app = FastAPI(title="Opentrons Protocol Simulator API", version="1.0.0")
@@ -54,10 +55,33 @@ async def root():
     return {"status": "online", "service": "Opentrons Protocol Simulator"}
 
 
+@app.post("/api/extract-params")
+async def extract_params(protocol_file: UploadFile = File(...)):
+    """
+    Extract runtime parameter definitions from a protocol without simulating.
+
+    Args:
+        protocol_file: Python protocol file (.py)
+
+    Returns:
+        JSON with has_parameters flag and parameter definitions
+    """
+    if not protocol_file.filename.endswith('.py'):
+        raise HTTPException(status_code=400, detail="Protocol file must be a .py file")
+
+    content = await protocol_file.read()
+    protocol_code = content.decode('utf-8')
+    result = extract_parameters(protocol_code)
+    return JSONResponse(result)
+
+
 @app.post("/api/simulate")
 async def simulate_protocol(
     protocol_file: UploadFile = File(...),
-    metadata: Optional[str] = Form(None)
+    metadata: Optional[str] = Form(None),
+    param_values: Optional[str] = Form(None),
+    csv_files: Optional[List[UploadFile]] = File(None),
+    csv_param_mapping: Optional[str] = Form(None),
 ):
     """
     Simulate an Opentrons protocol and return all artifacts.
@@ -65,6 +89,9 @@ async def simulate_protocol(
     Args:
         protocol_file: Python protocol file (.py)
         metadata: Optional JSON metadata string
+        param_values: Optional JSON string of runtime parameter overrides
+        csv_files: Optional CSV file uploads for CSV runtime parameters
+        csv_param_mapping: Optional JSON mapping variable_name -> filename
 
     Returns:
         JSON with robot_config, steps, deck_layout, and SVG
@@ -80,6 +107,28 @@ async def simulate_protocol(
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="Invalid JSON metadata")
 
+    # Parse runtime parameter values if provided
+    param_dict = {}
+    if param_values:
+        try:
+            param_dict = json.loads(param_values)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON in param_values")
+
+    # Process CSV file uploads
+    csv_data = {}
+    if csv_files and csv_param_mapping:
+        try:
+            mapping = json.loads(csv_param_mapping)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON in csv_param_mapping")
+        for csv_file in csv_files:
+            for var_name, filename in mapping.items():
+                if csv_file.filename == filename:
+                    content = await csv_file.read()
+                    csv_data[var_name] = content.decode('utf-8')
+                    break
+
     # Save uploaded file temporarily
     temp_protocol = TEMP_DIR / protocol_file.filename
     try:
@@ -90,7 +139,8 @@ async def simulate_protocol(
         # (opentrons.simulate internally uses asyncio.run which can't be called
         # from within FastAPI's running event loop)
         result = await asyncio.to_thread(
-            run_simulation_sync, str(temp_protocol), metadata_dict
+            run_simulation_sync, str(temp_protocol), metadata_dict,
+            param_dict or None, csv_data or None
         )
 
         if not result['success']:

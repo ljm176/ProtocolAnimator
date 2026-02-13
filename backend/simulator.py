@@ -10,12 +10,37 @@ from io import StringIO
 import sys
 
 
+class _MockCSVParameter:
+    """
+    Mimics opentrons CSVParameter so that protocol.params.<csv_var>.parse_as_csv()
+    and .contents work during simulation.
+
+    parse_as_csv() returns list[list[str]] (rows including header), matching the
+    real Opentrons API. Protocols typically do:
+        data = protocol.params.my_csv.parse_as_csv()
+        for row in data[1:]:  # skip header
+            slot, well, volume = row[0], row[1], float(row[2])
+    """
+
+    def __init__(self, contents: str):
+        self.contents = contents
+        self.file = __import__('io').StringIO(contents)
+
+    def parse_as_csv(self, **kwargs):
+        import csv
+        from io import StringIO
+        reader = csv.reader(StringIO(self.contents), **kwargs)
+        return list(reader)
+
+
 class ProtocolSimulator:
     """Simulates an Opentrons protocol and extracts structured data."""
 
-    def __init__(self, protocol_path: str, metadata: Optional[Dict] = None):
+    def __init__(self, protocol_path: str, metadata: Optional[Dict] = None, param_values: Optional[Dict] = None, csv_data: Optional[Dict] = None):
         self.protocol_path = Path(protocol_path)
         self.metadata = metadata or {}
+        self.param_values = param_values or {}
+        self.csv_data = csv_data or {}  # {variable_name: csv_string}
         self.robot_config = {}
         self.steps = []
         self.deck_layout = {}
@@ -49,9 +74,22 @@ class ProtocolSimulator:
             # Get API level from requirements first (Flex protocols), then metadata (OT-2), with fallback
             api_level = protocol_requirements.get('apiLevel') or protocol_metadata.get('apiLevel', '2.14')
 
+            # If user provided parameter overrides, rewrite defaults in the source
+            # so opentrons.simulate() picks up the custom values in its runlog
+            sim_code = protocol_code
+            if self.param_values and 'def add_parameters(' in protocol_code:
+                sim_code = self._rewrite_defaults(protocol_code, self.param_values)
+
+            # If CSV data is provided, rewrite the source to strip csv_file params
+            # and inject the data directly. opentrons.simulate.simulate() has no way
+            # to pass CSV files, so we must remove them from the parameter definitions
+            # and provide the data through a module-level mock object instead.
+            if self.csv_data and 'add_csv_file' in sim_code:
+                sim_code = self._rewrite_csv_params(sim_code, self.csv_data)
+
             # Run simulation to get runlog
             runlog, bundle = simulate(
-                StringIO(protocol_code),
+                StringIO(sim_code),
                 file_name=self.protocol_path.name,
                 log_level='info'
             )
@@ -66,8 +104,12 @@ class ProtocolSimulator:
                 '__name__': '__main__'
             }
 
-            # Execute the protocol code
-            exec(protocol_code, exec_globals)
+            # Execute the (potentially rewritten) protocol code
+            exec(sim_code, exec_globals)
+
+            # Inject runtime parameter values into the protocol context
+            if 'add_parameters' in exec_globals:
+                self._inject_runtime_params(exec_globals, protocol_context)
 
             # Run the protocol's run() function if it exists
             if 'run' in exec_globals:
@@ -455,6 +497,155 @@ class ProtocolSimulator:
         if robot_type == 'flex':
             return 'Flex'
         return 'OT-2'
+
+    def _rewrite_defaults(self, code: str, param_values: Dict[str, Any]) -> str:
+        """
+        Rewrite default values in add_parameters() calls so that
+        opentrons.simulate.simulate() picks up user-specified values.
+        """
+        import re
+        modified = code
+        for var_name, value in param_values.items():
+            # Match: variable_name="var_name" ... default=VALUE within a parameter call
+            pattern = (
+                r'(variable_name\s*=\s*["\']'
+                + re.escape(var_name)
+                + r'["\'][^)]*?default\s*=\s*)'
+                r'([^,\)]+)'
+            )
+            modified = re.sub(
+                pattern,
+                lambda m: m.group(1) + repr(value),
+                modified,
+                count=1,
+                flags=re.DOTALL,
+            )
+        return modified
+
+    def _rewrite_csv_params(self, code: str, csv_data: Dict[str, str]) -> str:
+        """
+        Rewrite protocol source to remove csv_file parameters from add_parameters()
+        and inject the CSV data as module-level mock objects.
+
+        opentrons.simulate.simulate() cannot accept CSV file data, so we:
+        1. Remove parameters.add_csv_file(...) calls from the source
+        2. Inject a lightweight mock class + instances at the top of the file
+        3. Patch protocol.params.<var> access in run() to use the injected data
+
+        The mock is injected by wrapping the run() function so that
+        protocol.params.<csv_var> resolves to our mock before the real
+        runtime-parameter system complains.
+        """
+        import re
+
+        modified = code
+
+        # Step 1: Remove add_csv_file() calls from add_parameters body
+        for var_name in csv_data:
+            # Match the full parameters.add_csv_file(...) call for this variable
+            # Use [ \t]* (not \s*) after the closing paren to avoid eating
+            # the indentation of the next line
+            pattern = (
+                r'[ \t]*parameters\.add_csv_file\s*\([^)]*variable_name\s*=\s*["\']'
+                + re.escape(var_name)
+                + r'["\'][^)]*\)[ \t]*\n?'
+            )
+            modified = re.sub(pattern, '', modified, count=1, flags=re.DOTALL)
+
+        # Step 2: Build a preamble that provides the CSV data as mock objects
+        preamble_lines = [
+            '# --- Injected CSV mock for simulation ---',
+            'import csv as _csv, io as _io',
+            'class _InjectedCSV:',
+            '    def __init__(self, _c):',
+            '        self.contents = _c',
+            '        self.file = _io.StringIO(_c)',
+            '    def parse_as_csv(self, **kw):',
+            '        return list(_csv.reader(_io.StringIO(self.contents), **kw))',
+        ]
+        for var_name, contents in csv_data.items():
+            preamble_lines.append(
+                f'_injected_csv_{var_name} = _InjectedCSV({repr(contents)})'
+            )
+        preamble_lines.append('# --- End injected CSV mock ---')
+        preamble = '\n'.join(preamble_lines) + '\n'
+
+        # Insert preamble after the imports (before first def/class or metadata/requirements)
+        # Find a safe insertion point: after the last top-level import or module docstring
+        insert_match = re.search(
+            r'^(from\s+\S+\s+import\s+.*|import\s+\S+.*)\n',
+            modified,
+            re.MULTILINE,
+        )
+        if insert_match:
+            insert_pos = insert_match.end()
+            modified = modified[:insert_pos] + '\n' + preamble + '\n' + modified[insert_pos:]
+        else:
+            modified = preamble + '\n' + modified
+
+        # Step 3: Wrap run() to patch protocol.params with our CSV mocks
+        # We inject setattr calls at the very start of run()
+        patch_lines = []
+        for var_name in csv_data:
+            patch_lines.append(
+                f'    try:\n'
+                f'        setattr(protocol.params, "{var_name}", _injected_csv_{var_name})\n'
+                f'    except Exception:\n'
+                f'        pass'
+            )
+        patch_block = '\n'.join(patch_lines) + '\n'
+
+        # Insert the patch right after "def run(protocol...):" line
+        run_pattern = r'(def\s+run\s*\([^)]*\)\s*:\s*\n)'
+        modified = re.sub(
+            run_pattern,
+            lambda m: m.group(1) + patch_block,
+            modified,
+            count=1,
+        )
+
+        return modified
+
+    def _inject_runtime_params(self, exec_globals: Dict, protocol_context: Any) -> None:
+        """
+        Inject runtime parameter values into the protocol context so that
+        protocol.params.<variable_name> returns the user-specified value.
+        """
+        import types
+        import csv as csv_mod
+        from io import StringIO as SIO
+        from parameter_extractor import MockParameterContext
+
+        try:
+            # Discover parameter definitions using the mock context
+            mock_ctx = MockParameterContext()
+            exec_globals['add_parameters'](mock_ctx)
+
+            # Build a namespace with defaults, then apply user overrides
+            param_attrs = {}
+            for param_def in mock_ctx.parameters:
+                vname = param_def['variable_name']
+                if param_def['type'] == 'csv_file':
+                    # Create a mock CSV parameter object
+                    csv_contents = self.csv_data.get(vname, '')
+                    param_attrs[vname] = _MockCSVParameter(csv_contents)
+                else:
+                    param_attrs[vname] = param_def['default']
+
+            # Apply user-provided overrides for primitive params
+            for vname, value in self.param_values.items():
+                if vname in param_attrs and not isinstance(param_attrs[vname], _MockCSVParameter):
+                    param_attrs[vname] = value
+
+            # Create a simple namespace that protocol.params will return
+            params_ns = types.SimpleNamespace(**param_attrs)
+
+            # Monkey-patch onto the protocol context
+            # Works for both OT-2 and Flex contexts
+            protocol_context._params = params_ns
+        except Exception as e:
+            import traceback
+            print(f"Warning: Could not inject runtime parameters: {traceback.format_exc()}")
 
     def _extract_deck_layout(self, protocol: Any) -> None:
         """Extract deck layout information for visualization."""

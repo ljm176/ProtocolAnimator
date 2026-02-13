@@ -1,0 +1,9 @@
+source_slot,source_well,dest_slot,dest_well,volume
+2,A1,3,A1,15.0
+2,A3,3,B2,25.0
+2,B1,3,C3,10.0
+2,C5,3,D1,50.0
+2,D2,3,E4,30.0
+2,E6,3,F5,20.0
+2,F1,3,G2,35.0
+2,G4,3,H6,45.0

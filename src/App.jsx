@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ProtocolInput from './components/ProtocolInput'
+import RuntimeParameters from './components/RuntimeParameters'
 import DeckVisualization from './components/DeckVisualization'
 import StepsTimeline from './components/StepsTimeline'
 import RobotConfig from './components/RobotConfig'
@@ -13,7 +14,69 @@ function App() {
   const [error, setError] = useState(null)
   const [currentStepIndex, setCurrentStepIndex] = useState(-1)
 
+  // Runtime parameters state
+  const [protocolFile, setProtocolFile] = useState(null)
+  const [parameterDefs, setParameterDefs] = useState(null)
+  const [paramValues, setParamValues] = useState({})
+  const [csvFiles, setCsvFiles] = useState({})
+  const [extractingParams, setExtractingParams] = useState(false)
+
+  const handleFileSelected = async (file) => {
+    setProtocolFile(file)
+    setParameterDefs(null)
+    setParamValues({})
+    setCsvFiles({})
+    setSimulationData(null)
+    setError(null)
+
+    // Check for runtime parameters
+    setExtractingParams(true)
+    try {
+      const formData = new FormData()
+      formData.append('protocol_file', file)
+      const response = await fetch(`${API_URL}/api/extract-params`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await response.json()
+
+      if (data.has_parameters && data.parameters.length > 0) {
+        setParameterDefs(data.parameters)
+        // Initialize with defaults
+        const defaults = {}
+        data.parameters.forEach(p => {
+          if (p.type !== 'csv_file' && p.default != null) {
+            defaults[p.variable_name] = p.default
+          }
+        })
+        setParamValues(defaults)
+      } else {
+        setParameterDefs([])
+      }
+    } catch (err) {
+      console.error('Parameter extraction failed:', err)
+      setParameterDefs([])
+    } finally {
+      setExtractingParams(false)
+    }
+  }
+
   const handleSimulate = async (formData) => {
+    // Append runtime parameter values if any
+    if (paramValues && Object.keys(paramValues).length > 0) {
+      formData.append('param_values', JSON.stringify(paramValues))
+    }
+
+    // Append CSV files if any
+    if (csvFiles && Object.keys(csvFiles).length > 0) {
+      const mapping = {}
+      for (const [varName, file] of Object.entries(csvFiles)) {
+        formData.append('csv_files', file)
+        mapping[varName] = file.name
+      }
+      formData.append('csv_param_mapping', JSON.stringify(mapping))
+    }
+
     setLoading(true)
     setError(null)
 
@@ -45,6 +108,8 @@ function App() {
     }
   }
 
+  const hasParameters = parameterDefs && parameterDefs.length > 0
+
   return (
     <div className="min-h-screen bg-surface-0">
       {/* Header */}
@@ -60,11 +125,30 @@ function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-10">
         {!simulationData ? (
-          /* Landing — hero drop zone */
+          /* Landing — hero drop zone + optional parameters */
           <div className="flex flex-col items-center justify-center min-h-[60vh]">
             <div className="w-full max-w-xl">
-              <ProtocolInput onSimulate={handleSimulate} loading={loading} hero />
+              <ProtocolInput
+                onSimulate={handleSimulate}
+                onFileSelected={handleFileSelected}
+                loading={loading}
+                extractingParams={extractingParams}
+                hero
+              />
             </div>
+
+            {/* Runtime Parameters Form */}
+            {hasParameters && (
+              <div className="mt-6 w-full max-w-xl">
+                <RuntimeParameters
+                  parameters={parameterDefs}
+                  values={paramValues}
+                  csvFiles={csvFiles}
+                  onValuesChange={setParamValues}
+                  onCsvFileChange={setCsvFiles}
+                />
+              </div>
+            )}
 
             {/* Error Display */}
             {error && (
@@ -90,8 +174,26 @@ function App() {
           /* Results view */
           <>
             <div className="mb-10">
-              <ProtocolInput onSimulate={handleSimulate} loading={loading} />
+              <ProtocolInput
+                onSimulate={handleSimulate}
+                onFileSelected={handleFileSelected}
+                loading={loading}
+                extractingParams={extractingParams}
+              />
             </div>
+
+            {/* Runtime Parameters (collapsed in results view) */}
+            {hasParameters && (
+              <div className="mb-6">
+                <RuntimeParameters
+                  parameters={parameterDefs}
+                  values={paramValues}
+                  csvFiles={csvFiles}
+                  onValuesChange={setParamValues}
+                  onCsvFileChange={setCsvFiles}
+                />
+              </div>
+            )}
 
             {error && (
               <div className="mb-10 card px-5 py-4 border-red-500/20">
