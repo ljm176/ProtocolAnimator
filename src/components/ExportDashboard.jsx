@@ -89,8 +89,8 @@ export default function ExportDashboard({ artifactPaths, report }) {
           onClick={() => {
             artifacts.forEach(artifact => downloadArtifact(artifact.id))
           }}
-          className="w-full py-2.5 px-4 rounded-lg hover:bg-zinc-300 transition-colors text-sm font-medium"
-          style={{ background: '#fafafa', color: '#09090b' }}
+          className="w-full py-2.5 px-4 rounded-lg hover:opacity-90 transition-colors text-sm font-medium"
+          style={{ background: '#00ff41', color: '#0a0d0a' }}
         >
           Download All
         </button>

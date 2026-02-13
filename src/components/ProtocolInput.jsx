@@ -60,12 +60,12 @@ export default function ProtocolInput({ onSimulate, onFileSelected, loading, her
         {...getRootProps()}
         className={`border border-dashed rounded-lg text-center cursor-pointer transition-all
           ${hero ? 'p-16' : 'p-10'}
-          ${isDragActive ? 'border-blue-500/40 bg-blue-500/5' : 'border-edge hover:border-edge-hover'}
-          ${protocolFile ? 'border-emerald-500/30 bg-emerald-500/5' : ''}
+          ${isDragActive ? 'border-matrix/40 bg-matrix/5' : 'border-edge hover:border-edge-hover'}
+          ${protocolFile ? 'border-matrix/30 bg-matrix/5' : ''}
         `}
       >
         <input {...getInputProps()} />
-        <Upload className={`${hero ? 'w-10 h-10 mb-4' : 'w-8 h-8 mb-3'} mx-auto ${protocolFile ? 'text-emerald-400' : 'text-text-ghost'}`} />
+        <Upload className={`${hero ? 'w-10 h-10 mb-4' : 'w-8 h-8 mb-3'} mx-auto ${protocolFile ? 'text-matrix' : 'text-text-ghost'}`} />
         {protocolFile ? (
           <div>
             <p className={`text-text-primary font-mono ${hero ? 'text-base' : 'text-sm'}`}>{protocolFile.name}</p>
@@ -117,12 +117,12 @@ export default function ProtocolInput({ onSimulate, onFileSelected, loading, her
         className={`mt-5 w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-all
           ${!protocolFile || loading
             ? 'bg-surface-3 cursor-not-allowed'
-            : 'hover:bg-zinc-300'
+            : 'hover:opacity-90'
           }
         `}
         style={!protocolFile || loading
-          ? { color: '#52525b' }
-          : { background: '#fafafa', color: '#09090b' }
+          ? { color: '#2d5e2d' }
+          : { background: '#00ff41', color: '#0a0d0a' }
         }
       >
         {loading ? (

@@ -19,7 +19,7 @@ export default function RuntimeParameters({ parameters, values, csvFiles, onValu
             onClick={() => handleChange(param.variable_name, !values[param.variable_name])}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
               values[param.variable_name]
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                ? 'border-matrix/30 bg-matrix/10 text-matrix'
                 : 'border-edge bg-surface-2 text-text-ghost'
             }`}
           >

@@ -30,7 +30,7 @@ export default function ValidationPanel() {
       <div className="space-y-1">
         {tips.map((tip, idx) => (
           <div key={idx} className="flex gap-3 px-3 py-3 rounded-lg hover:bg-surface-2 transition-colors">
-            <div className={`w-1 rounded-full flex-shrink-0 ${tip.accent ? 'bg-emerald-500' : 'bg-surface-4'}`} />
+            <div className={`w-1 rounded-full flex-shrink-0 ${tip.accent ? 'bg-matrix' : 'bg-surface-4'}`} />
             <div>
               <h3 className="text-sm text-text-primary mb-0.5">{tip.title}</h3>
               <p className="text-xs text-text-tertiary leading-relaxed">{tip.description}</p>

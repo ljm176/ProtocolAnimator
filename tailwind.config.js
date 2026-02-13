@@ -8,22 +8,29 @@ export default {
     extend: {
       colors: {
         surface: {
-          0: '#09090b',
-          1: '#111113',
-          2: '#18181b',
-          3: '#1f1f23',
-          4: '#27272a',
+          0: '#0a0d0a',
+          1: '#0f140f',
+          2: '#131a13',
+          3: '#1a231a',
+          4: '#212d21',
         },
         edge: {
-          DEFAULT: 'rgba(255,255,255,0.06)',
-          hover: 'rgba(255,255,255,0.1)',
-          active: 'rgba(255,255,255,0.15)',
+          DEFAULT: 'rgba(0,255,65,0.08)',
+          hover: 'rgba(0,255,65,0.14)',
+          active: 'rgba(0,255,65,0.20)',
         },
         text: {
-          primary: '#fafafa',
-          secondary: '#a1a1aa',
-          tertiary: '#71717a',
-          ghost: '#52525b',
+          primary: '#b8f0b8',
+          secondary: '#7bc47b',
+          tertiary: '#4a8a4a',
+          ghost: '#2d5e2d',
+        },
+        matrix: {
+          DEFAULT: '#00ff41',
+          dim: '#3ddc84',
+          amber: '#e6b800',
+          teal: '#00bfa5',
+          warm: '#c8a000',
         },
       },
       fontFamily: {

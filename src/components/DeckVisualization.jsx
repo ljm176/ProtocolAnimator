@@ -61,6 +61,11 @@ export default function DeckVisualization({
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.2, 0.5))
   const handleReset = () => setZoom(1)
 
+  // Reset playback when new simulation data arrives
+  useEffect(() => {
+    setIsPlaying(false)
+  }, [steps])
+
   // Animation loop
   useEffect(() => {
     if (!isPlaying || !steps.length) return
@@ -247,12 +252,12 @@ export default function DeckVisualization({
   // Render triangle indicator
   const renderTriangle = (type, x, y, key) => {
     const configs = {
-      aspirate: { color: '#10b981', direction: 'up' },
-      dispense: { color: '#ef4444', direction: 'down' },
-      distribute: { color: '#10b981', direction: 'up' },
-      transfer: { color: '#10b981', direction: 'up' },
-      pick_up_tip: { color: '#000000', direction: 'up' },
-      drop_tip: { color: '#000000', direction: 'down' }
+      aspirate: { color: '#00ff41', direction: 'down' },
+      dispense: { color: '#e6b800', direction: 'up' },
+      distribute: { color: '#00ff41', direction: 'down' },
+      transfer: { color: '#00ff41', direction: 'down' },
+      pick_up_tip: { color: '#e0f0e0', direction: 'up' },
+      drop_tip: { color: '#2d5e2d', direction: 'down' }
     }
 
     const config = configs[type] || configs.aspirate
@@ -394,7 +399,7 @@ export default function DeckVisualization({
               refY="3"
               orient="auto"
             >
-              <polygon points="0 0, 10 3, 0 6" fill="#f59e0b" />
+              <polygon points="0 0, 10 3, 0 6" fill="#e6b800" />
             </marker>
           </defs>
           <line
@@ -402,7 +407,7 @@ export default function DeckVisualization({
             y1={startY}
             x2={endX}
             y2={endY}
-            stroke="#f59e0b"
+            stroke="#e6b800"
             strokeWidth="3"
             strokeDasharray="8,4"
             markerEnd="url(#arrowhead)"
@@ -415,7 +420,7 @@ export default function DeckVisualization({
             width={config.slotWidth - 10}
             height={config.slotHeight - 10}
             fill="none"
-            stroke="#f59e0b"
+            stroke="#e6b800"
             strokeWidth="3"
             opacity="0.6"
             className="animate-pulse"
@@ -426,7 +431,7 @@ export default function DeckVisualization({
             width={config.slotWidth - 10}
             height={config.slotHeight - 10}
             fill="none"
-            stroke="#f59e0b"
+            stroke="#e6b800"
             strokeWidth="3"
             opacity="0.6"
             className="animate-pulse"
@@ -449,7 +454,7 @@ export default function DeckVisualization({
         width={config.slotWidth - 10}
         height={config.slotHeight - 10}
         fill="none"
-        stroke="#3b82f6"
+        stroke="#c8a000"
         strokeWidth="3"
         opacity="0.6"
         className="animate-pulse"
@@ -479,8 +484,8 @@ export default function DeckVisualization({
         <div className="flex items-center gap-2 mb-5 p-3 bg-surface-2 rounded-lg border border-edge">
           <button
             onClick={handlePlayPause}
-            className="p-2 rounded-md hover:bg-zinc-300 transition-colors"
-            style={{ background: '#fafafa', color: '#09090b' }}
+            className="p-2 rounded-md hover:opacity-90 transition-colors"
+            style={{ background: '#00ff41', color: '#0a0d0a' }}
             title={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? <Pause size={14} /> : <Play size={14} />}
@@ -504,6 +509,18 @@ export default function DeckVisualization({
               : `${steps.length} steps`
             }
           </div>
+        </div>
+      )}
+
+      {/* Current Step Indicator */}
+      {currentStepIndex >= 0 && currentStepIndex < steps.length && (
+        <div className="mb-3 px-4 py-2.5 bg-surface-1 rounded-lg border border-matrix/20 flex items-center gap-3 font-mono">
+          <span className="text-matrix text-sm">
+            {{ aspirate: '↑', dispense: '↓', pick_up_tip: '◆', drop_tip: '◇', mix: '↻', 'module.set_temperature': '○', move_labware: '→' }[steps[currentStepIndex].type] || '·'}
+          </span>
+          <span className="text-xs text-text-ghost">{currentStepIndex + 1}</span>
+          <span className="text-xs text-text-tertiary">{steps[currentStepIndex].type}</span>
+          <span className="text-sm text-text-primary truncate">{steps[currentStepIndex].metadata?.text || 'No description'}</span>
         </div>
       )}
 
@@ -544,15 +561,15 @@ export default function DeckVisualization({
       {/* Color Legend */}
       <div className="mt-5 flex flex-wrap gap-4 text-xs text-text-ghost">
         <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 bg-blue-500/20 border border-blue-400/50 rounded-sm"></div>
+          <div className="w-2.5 h-2.5 bg-matrix-warm/20 border border-matrix-warm/50 rounded-sm"></div>
           <span>Modules</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 bg-emerald-500/20 border border-emerald-400/50 rounded-sm"></div>
+          <div className="w-2.5 h-2.5 bg-matrix/20 border border-matrix/50 rounded-sm"></div>
           <span>Tipracks</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 bg-zinc-500/20 border border-zinc-400/50 rounded-sm"></div>
+          <div className="w-2.5 h-2.5 bg-matrix-dim/20 border border-matrix-dim/50 rounded-sm"></div>
           <span>Labware</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -562,11 +579,11 @@ export default function DeckVisualization({
         {robotModel === 'Flex' && (
           <>
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 border border-dashed border-zinc-500 rounded-sm"></div>
+              <div className="w-2.5 h-2.5 border border-dashed border-matrix-dim/50 rounded-sm"></div>
               <span>Staging</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 border border-amber-500/50 rounded-sm" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(245,158,11,0.3) 2px, rgba(245,158,11,0.3) 4px)'}}></div>
+              <div className="w-2.5 h-2.5 border border-matrix-amber/50 rounded-sm" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(230,184,0,0.3) 2px, rgba(230,184,0,0.3) 4px)'}}></div>
               <span>Gripper</span>
             </div>
           </>

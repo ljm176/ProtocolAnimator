@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, ChevronUp, Filter, Download } from 'lucide-react'
 
 const STEP_ICONS = {
-  aspirate: '↓',
-  dispense: '↑',
+  aspirate: '↑',
+  dispense: '↓',
   pick_up_tip: '◆',
   drop_tip: '◇',
   mix: '↻',
@@ -13,14 +13,14 @@ const STEP_ICONS = {
 }
 
 const STEP_ACCENTS = {
-  aspirate: 'border-l-blue-400',
-  dispense: 'border-l-emerald-400',
-  pick_up_tip: 'border-l-amber-400',
-  drop_tip: 'border-l-zinc-500',
-  mix: 'border-l-violet-400',
-  'module.set_temperature': 'border-l-orange-400',
-  move_labware: 'border-l-amber-400',
-  other: 'border-l-zinc-600'
+  aspirate: 'border-l-matrix',
+  dispense: 'border-l-matrix-amber',
+  pick_up_tip: 'border-l-[#e0f0e0]',
+  drop_tip: 'border-l-green-900',
+  mix: 'border-l-matrix-teal',
+  'module.set_temperature': 'border-l-matrix-warm',
+  move_labware: 'border-l-matrix-amber',
+  other: 'border-l-green-800'
 }
 
 export default function StepsTimeline({ steps, currentStepIndex = -1, onStepClick }) {
@@ -128,7 +128,7 @@ export default function StepsTimeline({ steps, currentStepIndex = -1, onStepClic
               onClick={() => handleStepClick(index)}
               className={`border-l-2 rounded-r-lg px-4 py-2.5 transition-colors cursor-pointer ${
                 index === currentStepIndex
-                  ? 'border-l-white bg-surface-3'
+                  ? 'border-l-matrix bg-surface-3'
                   : `${STEP_ACCENTS[step.type] || STEP_ACCENTS.other} bg-transparent hover:bg-surface-2`
               }`}
             >
