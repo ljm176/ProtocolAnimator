@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Github, Linkedin } from 'lucide-react'
 import ProtocolInput from './components/ProtocolInput'
 import RuntimeParameters from './components/RuntimeParameters'
 import DeckVisualization from './components/DeckVisualization'
@@ -146,48 +147,33 @@ function App() {
             <section>
               <h2 className="text-lg font-semibold text-text-primary mb-3">What is Protocol Animator?</h2>
               <p className="text-sm text-text-secondary leading-relaxed">
-                Protocol Animator is a free, open-source tool that lets you simulate
-                Opentrons Python protocols entirely in your browser — no robot hardware
-                required. Upload a <code className="text-accent">.py</code> protocol
-                file written with the Opentrons API v2, and instantly see the deck
-                layout, step-by-step execution, and full robot configuration.
+                Protocol Animator is a free tool for watching an animation of your Opentrons protocol. 
+                Upload a <code className="text-accent">.py</code> protocol
+                file written with the Opentrons API v2, and check that the protocol is doing what you expect.
               </p>
             </section>
 
-            <section>
-              <h2 className="text-lg font-semibold text-text-primary mb-3">How to use it</h2>
-              <ol className="list-decimal list-inside text-sm text-text-secondary leading-relaxed space-y-2">
-                <li>Switch to the <strong>Simulator</strong> tab above.</li>
-                <li>Drag &amp; drop (or click to browse) your <code className="text-accent">.py</code> protocol file.</li>
-                <li>If your protocol defines runtime parameters, a form will appear — fill in any values you want to override.</li>
-                <li>Click <strong>Simulate Protocol</strong> and wait a few seconds.</li>
-                <li>Explore the results:
-                  <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
-                    <li><strong>Deck view</strong> — interactive layout of every slot, labware, and module.</li>
-                    <li><strong>Steps timeline</strong> — every aspirate, dispense, and module command in order. Click a step to highlight it on the deck.</li>
-                    <li><strong>Robot config</strong> — pipettes, modules, and labware details at a glance.</li>
-                  </ul>
-                </li>
-                <li>Download artifacts (JSON, SVG, Markdown report) from the <strong>Export</strong> panel.</li>
-              </ol>
-            </section>
 
-            <section>
-              <h2 className="text-lg font-semibold text-text-primary mb-3">Supported protocols</h2>
-              <ul className="list-disc list-inside text-sm text-text-secondary leading-relaxed space-y-1">
-                <li>Opentrons API v2 Python protocols (<code className="text-accent">.py</code> files).</li>
-                <li>OT-2 and Flex robot types.</li>
-                <li>Runtime parameters — including int, float, bool, string, and CSV file parameters.</li>
-              </ul>
-            </section>
-
-            <section>
-              <h2 className="text-lg font-semibold text-text-primary mb-3">Open source</h2>
-              <p className="text-sm text-text-secondary leading-relaxed">
-                Protocol Animator is open source and community-driven.
-                Contributions, bug reports, and feature requests are welcome on GitHub.
-              </p>
-            </section>
+            <div className="flex gap-4 pt-2">
+              <a
+                href="https://github.com/ljm176/ProtocolAnimator"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-edge text-text-secondary hover:text-text-primary hover:border-accent transition-colors text-sm"
+              >
+                <Github size={18} />
+                GitHub
+              </a>
+              <a
+                href="https://www.linkedin.com/in/lachlan-munro/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-edge text-text-secondary hover:text-text-primary hover:border-accent transition-colors text-sm"
+              >
+                <Linkedin size={18} />
+                LinkedIn
+              </a>
+            </div>
           </div>
         ) : !simulationData ? (
           /* Landing — hero drop zone + optional parameters */
