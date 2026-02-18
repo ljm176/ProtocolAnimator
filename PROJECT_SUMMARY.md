@@ -1,8 +1,8 @@
-# 🔬 Opentrons Protocol Simulator - Project Summary
+# 🔬 Protocol Animator - Project Summary
 
 ## 📋 Overview
 
-A complete full-stack web application for simulating Opentrons Python protocols without physical hardware. Upload a protocol, visualize the deck layout, inspect execution steps, and export comprehensive artifacts.
+A complete full-stack web application for simulating Opentrons Python protocols without physical hardware. Not affiliated with Opentrons Labworks, Inc. Upload a protocol, visualize the deck layout, inspect execution steps, and export comprehensive artifacts.
 
 ## ✨ What We Built
 
@@ -33,7 +33,7 @@ A complete full-stack web application for simulating Opentrons Python protocols 
 ## 📁 File Structure (26 files created)
 
 ```
-OpentronsSimulator/
+ProtocolAnimator/
 ├── 📄 Configuration Files (7)
 │   ├── package.json              # Node dependencies & scripts
 │   ├── requirements.txt          # Python dependencies
@@ -338,6 +338,6 @@ npm run clean        # Clean build artifacts
 
 ---
 
-**Built with ❤️ for the Opentrons community**
+**Built with ❤️ for the Opentrons community** — not affiliated with Opentrons Labworks, Inc.
 
 *This project demonstrates modern full-stack development practices with Python and React, providing a useful tool for protocol development and validation.*

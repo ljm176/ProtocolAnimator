@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Opentrons Protocol Simulator - Setup Script
+# Protocol Animator - Setup Script
 
-echo "🔬 Opentrons Protocol Simulator Setup"
+echo "🔬 Protocol Animator Setup"
 echo "======================================"
 
 # Check Python

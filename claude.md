@@ -1,5 +1,5 @@
 
-# claude.md — Opentrons Protocol Simulator Agent
+# claude.md — Protocol Animator Agent
 
 ## Purpose
 Turn an Opentrons Python protocol (`.py`, API v2) into three things, **without** touching real hardware:

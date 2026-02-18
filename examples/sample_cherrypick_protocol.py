@@ -1,5 +1,5 @@
 """
-Sample Opentrons Protocol — CSV Cherrypicking
+Sample Protocol — CSV Cherrypicking
 Demonstrates the csv_file runtime parameter for well-picking transfers.
 Upload cherrypick_wells.csv alongside this protocol to test.
 """

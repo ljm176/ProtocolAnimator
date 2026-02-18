@@ -1,8 +1,8 @@
 @echo off
-REM Opentrons Protocol Simulator - Setup Script for Windows
+REM Protocol Animator - Setup Script for Windows
 
 echo.
-echo 🔬 Opentrons Protocol Simulator Setup
+echo 🔬 Protocol Animator Setup
 echo ======================================
 
 REM Check Python

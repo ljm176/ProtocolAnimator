@@ -1,5 +1,5 @@
 {
-  "name": "opentrons-simulator",
+  "name": "protocol-animator",
   "version": "1.0.0",
   "type": "module",
   "scripts": {

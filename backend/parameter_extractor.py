@@ -1,5 +1,5 @@
 """
-Runtime Parameter Extraction for Opentrons Protocols.
+Runtime Parameter Extraction for Opentrons protocols.
 Uses a mock ParameterContext to capture parameter definitions from
 the add_parameters() function without running the full simulation.
 """

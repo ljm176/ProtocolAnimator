@@ -1,5 +1,5 @@
 """
-FastAPI backend for Opentrons Protocol Simulator
+FastAPI backend for Protocol Animator
 Provides REST API endpoints for protocol simulation and artifact generation.
 """
 import asyncio
@@ -29,7 +29,7 @@ def run_simulation_sync(protocol_path: str, metadata_dict: dict, param_values: d
     simulator = ProtocolSimulator(protocol_path, metadata_dict, param_values=param_values, csv_data=csv_data)
     return simulator.simulate()
 
-app = FastAPI(title="Opentrons Protocol Simulator API", version="1.0.0")
+app = FastAPI(title="Protocol Animator API", version="1.0.0")
 
 # CORS middleware for frontend access
 app.add_middleware(
@@ -37,7 +37,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",  # Vite dev server
-        "https://opentrons-simulator.vercel.app",
+        "https://protocol-animator.vercel.app",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",  # Allow all Vercel preview deploys
     allow_credentials=True,
@@ -46,14 +46,14 @@ app.add_middleware(
 )
 
 # Temporary storage for simulation outputs
-TEMP_DIR = Path(tempfile.gettempdir()) / "opentrons_simulator"
+TEMP_DIR = Path(tempfile.gettempdir()) / "protocol_animator"
 TEMP_DIR.mkdir(exist_ok=True)
 
 
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "online", "service": "Opentrons Protocol Simulator"}
+    return {"status": "online", "service": "Protocol Animator"}
 
 
 @app.post("/api/extract-params")
@@ -85,7 +85,7 @@ async def simulate_protocol(
     csv_param_mapping: Optional[str] = Form(None),
 ):
     """
-    Simulate an Opentrons protocol and return all artifacts.
+    Simulate a protocol and return all artifacts.
 
     Args:
         protocol_file: Python protocol file (.py)

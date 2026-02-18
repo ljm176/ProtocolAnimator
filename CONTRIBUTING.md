@@ -1,4 +1,4 @@
-# Contributing to Opentrons Protocol Simulator
+# Contributing to Protocol Animator
 
 Thank you for your interest in contributing! This guide will help you get started.
 
@@ -6,8 +6,8 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/yourusername/OpentronsSimulator.git
-   cd OpentronsSimulator
+   git clone https://github.com/yourusername/ProtocolAnimator.git
+   cd ProtocolAnimator
    ```
 
 2. **Install Dependencies**
@@ -33,7 +33,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 ## Project Structure
 
 ```
-OpentronsSimulator/
+ProtocolAnimator/
 ├── backend/              # Python FastAPI backend
 │   ├── main.py          # API endpoints
 │   ├── simulator.py     # Core simulation logic
@@ -57,7 +57,7 @@ OpentronsSimulator/
 
 ### 🐛 Reporting Bugs
 
-1. Check if the bug has already been reported in [Issues](https://github.com/yourusername/OpentronsSimulator/issues)
+1. Check if the bug has already been reported in [Issues](https://github.com/yourusername/ProtocolAnimator/issues)
 2. If not, create a new issue with:
    - Clear title and description
    - Steps to reproduce
@@ -67,7 +67,7 @@ OpentronsSimulator/
 
 ### ✨ Suggesting Features
 
-1. Check [existing feature requests](https://github.com/yourusername/OpentronsSimulator/issues?q=label%3Aenhancement)
+1. Check [existing feature requests](https://github.com/yourusername/ProtocolAnimator/issues?q=label%3Aenhancement)
 2. Create a new issue with:
    - Clear use case
    - Expected behavior
@@ -130,7 +130,7 @@ OpentronsSimulator/
 ```python
 def simulate_protocol(protocol_path: str, metadata: Optional[Dict] = None) -> Dict[str, Any]:
     """
-    Simulate an Opentrons protocol.
+    Simulate a protocol.
 
     Args:
         protocol_path: Path to the protocol file
@@ -279,8 +279,8 @@ When adding features, update:
 
 ## Need Help?
 
-- **Questions**: Open a [Discussion](https://github.com/yourusername/OpentronsSimulator/discussions)
-- **Bugs**: Open an [Issue](https://github.com/yourusername/OpentronsSimulator/issues)
+- **Questions**: Open a [Discussion](https://github.com/yourusername/ProtocolAnimator/discussions)
+- **Bugs**: Open an [Issue](https://github.com/yourusername/ProtocolAnimator/issues)
 - **Chat**: Join our community (if available)
 
 ## Code of Conduct
@@ -295,4 +295,4 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 ---
 
-Thank you for contributing to Opentrons Protocol Simulator! 🔬✨
+Thank you for contributing to Protocol Animator! 🔬✨

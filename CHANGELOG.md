@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Backend
-- Core simulation engine using Opentrons API v2
+- Core simulation engine using the Opentrons API v2
 - FastAPI REST API with endpoints for simulate, download, and validate
 - Protocol parsing and execution in simulated environment
 - Robot configuration extraction (pipettes, modules, labware)

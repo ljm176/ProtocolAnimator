@@ -1,5 +1,5 @@
 """
-Sample Opentrons Flex Protocol - Flex Features Demo
+Sample Flex Protocol - Flex Features Demo
 Demonstrates Flex-specific features: coordinate slots, staging area, gripper moves
 """
 

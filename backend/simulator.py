@@ -1,5 +1,5 @@
 """
-Opentrons Protocol Simulator Core
+Protocol Animator Core
 Simulates Opentrons API v2 protocols and extracts configuration, deck layout, and steps.
 """
 import json

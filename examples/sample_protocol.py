@@ -1,5 +1,5 @@
 """
-Sample Opentrons Protocol - PCR Preparation
+Sample Protocol - PCR Preparation
 This protocol demonstrates a simple PCR setup workflow
 """
 

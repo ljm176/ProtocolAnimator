@@ -115,9 +115,9 @@ function App() {
       {/* Header */}
       <header className="border-b border-edge">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <p className="font-mono text-xs text-text-ghost uppercase tracking-widest mb-1">Simulator</p>
+          <p className="font-mono text-xs text-text-ghost uppercase tracking-widest mb-1">Protocol Animator</p>
           <h1 className="text-xl font-semibold text-gradient tracking-tight">
-            Opentrons Protocol Simulator
+            Protocol Animator
           </h1>
         </div>
       </header>
@@ -244,9 +244,14 @@ function App() {
 
       {/* Footer */}
       <footer className="border-t border-edge mt-20">
-        <div className="max-w-7xl mx-auto px-6 py-8 flex items-center justify-between">
-          <p className="text-xs text-text-ghost font-mono">v1.0.0</p>
-          <p className="text-xs text-text-ghost">Static simulator &middot; Opentrons API</p>
+        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col items-center gap-2">
+          <div className="flex items-center justify-between w-full">
+            <p className="text-xs text-text-ghost font-mono">v1.0.0</p>
+            <p className="text-xs text-text-ghost">Static simulator for Opentrons robots</p>
+          </div>
+          <p className="text-[10px] text-text-ghost/60">
+            Not affiliated with, endorsed by, or sponsored by Opentrons Labworks, Inc. &ldquo;Opentrons&rdquo; is a trademark of Opentrons Labworks, Inc.
+          </p>
         </div>
       </footer>
     </div>

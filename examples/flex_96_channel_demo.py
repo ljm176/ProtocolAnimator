@@ -1,5 +1,5 @@
 """
-Opentrons Flex Protocol - 96-Channel Pipette Demo
+Flex Protocol - 96-Channel Pipette Demo
 Simple liquid transfer using the 96-channel pipette
 """
 

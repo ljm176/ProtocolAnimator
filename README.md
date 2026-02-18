@@ -1,6 +1,8 @@
-# Opentrons Protocol Simulator
+# Protocol Animator
 
 A full-stack web application for simulating Opentrons Python protocols without hardware. Upload a protocol file and get visual deck layouts, execution steps, and robot configuration - all in your browser.
+
+> **Disclaimer:** This project is not affiliated with, endorsed by, or sponsored by Opentrons Labworks, Inc. "Opentrons" is a trademark of Opentrons Labworks, Inc.
 
 ## Features
 
@@ -44,7 +46,7 @@ A full-stack web application for simulating Opentrons Python protocols without h
 1. **Clone the repository**
 ```bash
 git clone <your-repo-url>
-cd OpentronsSimulator
+cd ProtocolAnimator
 ```
 
 2. **Install Python dependencies**
@@ -120,7 +122,7 @@ Validate a protocol without full simulation
 ## Project Structure
 
 ```
-OpentronsSimulator/
+ProtocolAnimator/
 ├── backend/
 │   ├── main.py              # FastAPI server
 │   ├── simulator.py         # Core simulation logic

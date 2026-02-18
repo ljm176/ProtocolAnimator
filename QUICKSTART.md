@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get up and running with Opentrons Protocol Simulator in 5 minutes!
+Get up and running with Protocol Animator in 5 minutes!
 
 ## 🚀 Quick Setup
 

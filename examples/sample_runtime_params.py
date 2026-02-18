@@ -1,5 +1,5 @@
 """
-Sample Opentrons Protocol with Runtime Parameters
+Sample Protocol with Runtime Parameters
 Demonstrates all parameter types for testing the parameter UI.
 """
 from opentrons import protocol_api
