@@ -297,7 +297,7 @@ function App() {
       <footer className="border-t border-edge mt-20">
         <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col items-center gap-2">
           <div className="flex items-center justify-between w-full">
-            <p className="text-xs text-text-ghost font-mono">v1.0.0</p>
+            <p className="text-xs text-text-ghost font-mono">&copy; 2025 Lachlan Munro. All rights reserved.</p>
             <p className="text-xs text-text-ghost">Static simulator for Opentrons robots</p>
           </div>
           <p className="text-[10px] text-text-ghost/60">
