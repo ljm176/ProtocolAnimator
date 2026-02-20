@@ -252,10 +252,10 @@ export default function DeckVisualization({
   // Render triangle indicator
   const renderTriangle = (type, x, y, key) => {
     const configs = {
-      aspirate: { color: '#00ff41', direction: 'down' },
-      dispense: { color: '#e6b800', direction: 'up' },
-      distribute: { color: '#00ff41', direction: 'down' },
-      transfer: { color: '#00ff41', direction: 'down' },
+      aspirate: { color: '#00ff41', direction: 'up' },
+      dispense: { color: '#e6b800', direction: 'down' },
+      distribute: { color: '#00ff41', direction: 'up' },
+      transfer: { color: '#00ff41', direction: 'up' },
       pick_up_tip: { color: '#e0f0e0', direction: 'up' },
       drop_tip: { color: '#2d5e2d', direction: 'down' }
     }
