@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from io import StringIO
 import sys
+from opentrons.simulate import simulate as _ot_simulate, get_protocol_api
 
 
 class _MockCSVParameter:
@@ -61,8 +62,6 @@ class ProtocolSimulator:
             Dict containing robot_config, steps, deck_layout, and metadata
         """
         try:
-            from opentrons.simulate import simulate, get_protocol_api
-            from io import StringIO
             import re
 
             # Read protocol file
@@ -99,7 +98,7 @@ class ProtocolSimulator:
                 sim_code = self._rewrite_labware_names(sim_code, self.labware_overrides)
 
             # Run simulation to get runlog
-            runlog, bundle = simulate(
+            runlog, bundle = _ot_simulate(
                 StringIO(sim_code),
                 file_name=self.protocol_path.name,
                 log_level='info'
