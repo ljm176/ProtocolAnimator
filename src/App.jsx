@@ -23,6 +23,10 @@ function App() {
   const [csvFiles, setCsvFiles] = useState({})
   const [extractingParams, setExtractingParams] = useState(false)
 
+  // Unknown labware resolution state
+  const [unknownLabware, setUnknownLabware] = useState(null)
+  const [labwareChoices, setLabwareChoices] = useState({})
+
   const handleFileSelected = async (file) => {
     setProtocolFile(file)
     setParameterDefs(null)
@@ -30,6 +34,8 @@ function App() {
     setCsvFiles({})
     setSimulationData(null)
     setError(null)
+    setUnknownLabware(null)
+    setLabwareChoices({})
 
     // Check for runtime parameters
     setExtractingParams(true)
@@ -94,16 +100,92 @@ function App() {
       const data = await response.json()
       console.log('Response data:', data)
 
-      if (!response.ok) {
-        const errorMessage = data.detail || data.message || 'Simulation failed'
+      // Check for unknown labware (returned as 200 with success: false)
+      if (data.success === false && data.unknown_labware && data.unknown_labware.length > 0) {
+        setUnknownLabware(data.unknown_labware)
+        const initial = {}
+        data.unknown_labware.forEach(name => { initial[name] = null })
+        setLabwareChoices(initial)
+        setLoading(false)
+        return
+      }
+
+      if (!response.ok || data.success === false) {
+        const errorMessage = data.detail || data.error || data.message || 'Simulation failed'
         console.error('Simulation error:', errorMessage)
         throw new Error(errorMessage)
       }
 
       console.log('Simulation successful!')
       setSimulationData(data)
+      setUnknownLabware(null)
     } catch (err) {
       console.error('Error during simulation:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLabwareResolution = async () => {
+    const SUBSTITUTES = {
+      '96': 'opentrons_96_wellplate_200ul_pcr_full_skirt',
+      '384': 'corning_384_wellplate_112ul_flat',
+    }
+
+    // Check for unsupported selections
+    const unsupported = Object.entries(labwareChoices).filter(([_, type]) => type === 'unsupported')
+    if (unsupported.length > 0) {
+      setError(`Sorry, the following labware is not supported: ${unsupported.map(([n]) => n).join(', ')}`)
+      setUnknownLabware(null)
+      return
+    }
+
+    // Build overrides map
+    const overridesMap = {}
+    for (const [name, type] of Object.entries(labwareChoices)) {
+      overridesMap[name] = SUBSTITUTES[type]
+    }
+
+    setUnknownLabware(null)
+    setLoading(true)
+    setError(null)
+
+    const formData = new FormData()
+    formData.append('protocol_file', protocolFile)
+
+    if (paramValues && Object.keys(paramValues).length > 0) {
+      formData.append('param_values', JSON.stringify(paramValues))
+    }
+    if (csvFiles && Object.keys(csvFiles).length > 0) {
+      const mapping = {}
+      for (const [varName, file] of Object.entries(csvFiles)) {
+        formData.append('csv_files', file)
+        mapping[varName] = file.name
+      }
+      formData.append('csv_param_mapping', JSON.stringify(mapping))
+    }
+
+    formData.append('labware_overrides', JSON.stringify(overridesMap))
+
+    try {
+      const response = await fetch(`${API_URL}/api/simulate`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await response.json()
+
+      if (data.success === false && data.unknown_labware && data.unknown_labware.length > 0) {
+        setUnknownLabware(data.unknown_labware)
+        const initial = {}
+        data.unknown_labware.forEach(name => { initial[name] = null })
+        setLabwareChoices(initial)
+      } else if (!response.ok || data.success === false) {
+        throw new Error(data.detail || data.error || 'Simulation failed')
+      } else {
+        setSimulationData(data)
+      }
+    } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
@@ -198,6 +280,57 @@ function App() {
                   onValuesChange={setParamValues}
                   onCsvFileChange={setCsvFiles}
                 />
+              </div>
+            )}
+
+            {/* Unknown Labware Resolution */}
+            {unknownLabware && (
+              <div className="mt-8 w-full max-w-xl card px-6 py-5" style={{ borderColor: 'rgba(230, 184, 0, 0.2)' }}>
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ backgroundColor: '#e6b800' }} />
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: '#e6b800' }}>Unknown Labware Detected</p>
+                    <p className="text-xs text-text-secondary mt-1">
+                      The following labware is not in the standard library. Select the well format so simulation can continue:
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3 ml-5">
+                  {unknownLabware.map(name => (
+                    <div key={name} className="p-3 bg-surface-2 rounded-lg border border-edge">
+                      <p className="font-mono text-xs text-text-primary mb-2">{name}</p>
+                      <div className="flex gap-2">
+                        {['96', '384', 'unsupported'].map(option => (
+                          <button
+                            key={option}
+                            onClick={() => setLabwareChoices(prev => ({...prev, [name]: option}))}
+                            className={`px-3 py-1.5 rounded text-xs font-mono transition-colors border ${
+                              labwareChoices[name] === option
+                                ? option === 'unsupported'
+                                  ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                                  : 'border-accent/30 bg-accent/10 text-accent'
+                                : 'border-edge bg-surface-3 text-text-ghost hover:text-text-secondary'
+                            }`}
+                          >
+                            {option === '96' ? '96-well plate' : option === '384' ? '384-well plate' : 'Not supported'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleLabwareResolution}
+                  disabled={Object.values(labwareChoices).some(v => v === null) || loading}
+                  className="mt-4 w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-all"
+                  style={
+                    Object.values(labwareChoices).some(v => v === null) || loading
+                      ? { backgroundColor: '#1a1d1a', color: '#2d5e2d', cursor: 'not-allowed' }
+                      : { backgroundColor: '#e6b800', color: '#0a0d0a' }
+                  }
+                >
+                  {loading ? 'Re-simulating...' : 'Continue with substitutes'}
+                </button>
               </div>
             )}
 

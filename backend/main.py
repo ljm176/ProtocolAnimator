@@ -21,12 +21,12 @@ from simulator import (
 from parameter_extractor import extract_parameters
 
 
-def run_simulation_sync(protocol_path: str, metadata_dict: dict, param_values: dict = None, csv_data: dict = None) -> dict:
+def run_simulation_sync(protocol_path: str, metadata_dict: dict, param_values: dict = None, csv_data: dict = None, labware_overrides: dict = None) -> dict:
     """
     Run protocol simulation synchronously.
     This is called in a thread pool to avoid asyncio.run() conflicts.
     """
-    simulator = ProtocolSimulator(protocol_path, metadata_dict, param_values=param_values, csv_data=csv_data)
+    simulator = ProtocolSimulator(protocol_path, metadata_dict, param_values=param_values, csv_data=csv_data, labware_overrides=labware_overrides)
     return simulator.simulate()
 
 app = FastAPI(title="Protocol Animator API", version="1.0.0")
@@ -83,6 +83,7 @@ async def simulate_protocol(
     param_values: Optional[str] = Form(None),
     csv_files: Optional[List[UploadFile]] = File(None),
     csv_param_mapping: Optional[str] = Form(None),
+    labware_overrides: Optional[str] = Form(None),
 ):
     """
     Simulate a protocol and return all artifacts.
@@ -93,6 +94,7 @@ async def simulate_protocol(
         param_values: Optional JSON string of runtime parameter overrides
         csv_files: Optional CSV file uploads for CSV runtime parameters
         csv_param_mapping: Optional JSON mapping variable_name -> filename
+        labware_overrides: Optional JSON mapping unknown labware names to standard substitutes
 
     Returns:
         JSON with robot_config, steps, deck_layout, and SVG
@@ -130,6 +132,14 @@ async def simulate_protocol(
                     csv_data[var_name] = content.decode('utf-8')
                     break
 
+    # Parse labware overrides if provided
+    labware_override_dict = {}
+    if labware_overrides:
+        try:
+            labware_override_dict = json.loads(labware_overrides)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON in labware_overrides")
+
     # Save uploaded file temporarily
     temp_protocol = TEMP_DIR / protocol_file.filename
     try:
@@ -141,10 +151,17 @@ async def simulate_protocol(
         # from within FastAPI's running event loop)
         result = await asyncio.to_thread(
             run_simulation_sync, str(temp_protocol), metadata_dict,
-            param_dict or None, csv_data or None
+            param_dict or None, csv_data or None, labware_override_dict or None
         )
 
         if not result['success']:
+            # Return unknown labware as a recoverable response, not a 500
+            if result.get('unknown_labware'):
+                return JSONResponse({
+                    'success': False,
+                    'unknown_labware': result['unknown_labware'],
+                    'error': result['error'],
+                })
             raise HTTPException(status_code=500, detail=result['error'])
 
         # Generate deck SVG

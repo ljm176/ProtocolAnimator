@@ -36,11 +36,18 @@ class _MockCSVParameter:
 class ProtocolSimulator:
     """Simulates an Opentrons protocol and extracts structured data."""
 
-    def __init__(self, protocol_path: str, metadata: Optional[Dict] = None, param_values: Optional[Dict] = None, csv_data: Optional[Dict] = None):
+    # Standard labware substitutes for unknown labware
+    LABWARE_SUBSTITUTES = {
+        '96': 'opentrons_96_wellplate_200ul_pcr_full_skirt',
+        '384': 'corning_384_wellplate_112ul_flat',
+    }
+
+    def __init__(self, protocol_path: str, metadata: Optional[Dict] = None, param_values: Optional[Dict] = None, csv_data: Optional[Dict] = None, labware_overrides: Optional[Dict] = None):
         self.protocol_path = Path(protocol_path)
         self.metadata = metadata or {}
         self.param_values = param_values or {}
         self.csv_data = csv_data or {}  # {variable_name: csv_string}
+        self.labware_overrides = labware_overrides or {}  # {unknown_load_name: standard_load_name}
         self.robot_config = {}
         self.steps = []
         self.deck_layout = {}
@@ -87,6 +94,10 @@ class ProtocolSimulator:
             if self.csv_data and 'add_csv_file' in sim_code:
                 sim_code = self._rewrite_csv_params(sim_code, self.csv_data)
 
+            # If labware overrides are provided, rewrite load_labware() calls
+            if self.labware_overrides:
+                sim_code = self._rewrite_labware_names(sim_code, self.labware_overrides)
+
             # Run simulation to get runlog
             runlog, bundle = simulate(
                 StringIO(sim_code),
@@ -130,14 +141,59 @@ class ProtocolSimulator:
 
         except Exception as e:
             import traceback
+            error_str = str(e)
             error_detail = traceback.format_exc()
+
+            # Detect unknown labware errors and return them separately
+            unknown_labware = self._detect_unknown_labware(error_str)
+            if unknown_labware:
+                return {
+                    'robot_config': {},
+                    'steps': [],
+                    'deck_layout': {},
+                    'success': False,
+                    'error': error_str,
+                    'unknown_labware': unknown_labware,
+                }
+
             return {
                 'robot_config': {},
                 'steps': [],
                 'deck_layout': {},
                 'success': False,
-                'error': f"{str(e)}\n\nDetails:\n{error_detail}"
+                'error': f"{error_str}\n\nDetails:\n{error_detail}"
             }
+
+    def _detect_unknown_labware(self, error_str: str) -> Optional[List[str]]:
+        """Parse simulation error to extract unknown labware load names."""
+        import re
+        names = set()
+        # Pattern: 'Labware "X" not found'
+        for m in re.finditer(r'Labware "([^"]+)" not found', error_str):
+            names.add(m.group(1))
+        # Pattern: 'Unable to find a labware...definition for "X"'
+        for m in re.finditer(r'Unable to find a labware\s+definition for "([^"]+)"', error_str):
+            names.add(m.group(1))
+        return list(names) if names else None
+
+    def _rewrite_labware_names(self, code: str, overrides: Dict[str, str]) -> str:
+        """
+        Rewrite protocol source to substitute unknown labware load names
+        with known standard ones in load_labware() calls.
+        The label argument is preserved so the user sees their original name.
+        """
+        import re
+        modified = code
+        for unknown_name, substitute_name in overrides.items():
+            pattern = r"""(load_labware\s*\(\s*)(['"]){name}(['"])""".format(
+                name=re.escape(unknown_name)
+            )
+            def make_replacer(sub):
+                def replacer(m):
+                    return m.group(1) + m.group(2) + sub + m.group(3)
+                return replacer
+            modified = re.sub(pattern, make_replacer(substitute_name), modified)
+        return modified
 
     def _extract_robot_config(self, protocol: Any, robot_model: str = 'OT-2', api_level: str = '2.x') -> None:
         """Extract pipettes, modules, and labware from the protocol context."""
