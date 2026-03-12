@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Github, Linkedin } from 'lucide-react'
+import { Analytics } from '@vercel/analytics/react'
+import { Github, Linkedin, Bug } from 'lucide-react'
 import ProtocolInput from './components/ProtocolInput'
 import RuntimeParameters from './components/RuntimeParameters'
 import DeckVisualization from './components/DeckVisualization'
@@ -255,6 +256,15 @@ function App() {
                 <Linkedin size={18} />
                 LinkedIn
               </a>
+              <a
+                href="https://github.com/ljm176/ProtocolAnimator/issues/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-edge text-text-secondary hover:text-text-primary hover:border-accent transition-colors text-sm"
+              >
+                <Bug size={18} />
+                Report a Bug
+              </a>
             </div>
           </div>
         ) : !simulationData ? (
@@ -438,6 +448,7 @@ function App() {
           </p>
         </div>
       </footer>
+      <Analytics />
     </div>
   )
 }

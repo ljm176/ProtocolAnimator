@@ -12,10 +12,11 @@
     "clean": "rm -rf dist node_modules backend/__pycache__ backend/output"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
+    "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-dropzone": "^14.2.3",
-    "lucide-react": "^0.344.0"
+    "react-dropzone": "^14.2.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
